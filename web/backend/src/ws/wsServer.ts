@@ -5,7 +5,7 @@ import { URL } from 'url';
 
 const PING_INTERVAL_MS  = 60_000;  // send ping every 60s
 const PING_MAX_MISSED   = 2;        // terminate after 2 consecutive missed pongs (~2min tolerance)
-const RPC_TIMEOUT_MS    = 30_000;
+const RPC_TIMEOUT_MS    = 120_000;
 const ts = () => new Date().toISOString().slice(11, 19); // HH:MM:SS
 
 // uid -> connected phone WebSocket

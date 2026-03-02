@@ -73,8 +73,13 @@ export const tools: Tool[] = [
   },
   {
     name: 'screenshot',
-    description: 'Take a screenshot of the current screen. Returns a PNG image.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'Take a screenshot of the current screen. Returns a JPEG image. Use for result verification only — use snapshot for reading UI elements.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        quality: { type: 'number', description: 'JPEG quality 1-100. Default: 30. Lower = smaller image.' },
+      },
+    },
   },
 ];
 
@@ -154,7 +159,8 @@ export async function handle(name: string, args: any): Promise<any> {
 
   // screenshot — MCP image block
   if (name === 'screenshot') {
-    const result = await sendAdb('screenshot', {});
+    const quality = typeof args?.quality === 'number' ? args.quality : 30;
+    const result = await sendAdb('screenshot', { quality });
     if (result.success && result.data?.data) {
       return {
         content: [{

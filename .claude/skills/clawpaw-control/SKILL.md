@@ -1,165 +1,113 @@
 ---
 name: clawpaw-control
-description: Execute user instructions on the phone via ClawPaw backend. Use when a user wants to do something on the phone — send a message, open an app, tap something, take a screenshot, etc.
-tools: Bash
+description: Execute user instructions on the phone via ClawPaw MCP tools. Use when a user wants to do something on the phone — send a message, open an app, tap something, take a screenshot, etc.
 ---
 
 # ClawPaw Phone Control
 
-Execute user instructions on the phone step by step using the ClawPaw backend API.
+Execute user instructions on the phone step by step using the ClawPaw MCP tools.
 
-## Credentials
+The MCP tools are available directly — no curl, no API calls needed.
 
-Read UID and Secret from environment or ask the user:
-- `CLAWPAW_UID` — user's UID (e.g. `555914e7-fd98-4837-b346-ebb2b53929e7`)
-- `CLAWPAW_SECRET` — user's secret (e.g. `clawpaw_7d7669...`)
+## Available MCP Tools
 
-Base URL: `https://www.clawpaw.me`
+### UI / Interaction
+- **`snapshot`** — Get the UI element tree (text, resource IDs, bounds, clickable state)
+- **`tap`** — Tap by coordinates OR by text/resourceId/contentDesc
+- **`long_press`** — Long press at x/y
+- **`swipe`** — Swipe by direction shortcut (`up`/`down`/`left`/`right`) or explicit coordinates
+- **`type_text`** — Type text into the focused field (supports Chinese, emoji)
+- **`press_key`** — Press a key: `home`, `back`, `enter`, `delete`, `wakeup`, `volume_up`, `volume_down`, etc.
+- **`screenshot`** — Take a screenshot (returns PNG image)
 
-## Core Principle: Always Use UI Tree for Coordinates
+### Device Info
+- **`battery`** — Battery level, charging state, temperature
+- **`location`** — GPS coordinates
+- **`network`** — WiFi / mobile data status
+- **`storage`** — Storage usage
+- **`screen_state`** — Screen on/off, locked
 
-**NEVER guess tap coordinates from a screenshot.**
+### Hardware
 
-Screenshots may be displayed at a different size than the actual device resolution. The UI tree (`snapshot`) returns `bounds` in real device pixels — always use those for taps.
+- **`flashlight`** — Get or set flashlight. Use `on=true` to turn on, `on=false` to turn off, omit to get state. **Never pass `action` — only `on: boolean`.**
+- **`volume`** — Get or set volume (stream: media/ring/alarm/notification, level: 0-15)
+- **`brightness`** — Get or set screen brightness (level: 0-255)
+- **`vibrate`** — Vibrate device (duration ms)
+- **`ringtone_mode`** — Get or set ringer mode (silent/vibrate/normal)
+- **`media_control`** — Control playback (action: play/pause/toggle/next/previous/stop)
 
-Correct workflow for any tap:
-1. Call `snapshot` to get the UI tree XML
-2. Find the target element by `text`, `content-desc`, or `resource-id`
-3. Compute center: `x = (left + right) / 2`, `y = (top + bottom) / 2`
-4. Call `tap` with those exact coordinates
+### Media
+- **`camera_snap`** — Take a photo (back/front camera)
+- **`audio_record`** — Record audio (action: capture/start/stop)
+- **`audio_status`** — Check if recording is in progress
+- **`sensors`** — Read accelerometer, gyroscope, light, etc.
 
-## API Reference
+## Core Principles
 
-All requests: `POST https://www.clawpaw.me/api/adb/<action>`
-Headers: `Content-Type: application/json`, `x-clawpaw-secret: <SECRET>`
-Body always includes: `"uid": "<UID>"`
+### snapshot vs screenshot — when to use each
 
-### screenshot
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/screenshot \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>"}' | python3 -c "
-import sys,json,base64
-d=json.load(sys.stdin)
-if d.get('success') and d.get('data',{}).get('data'):
-    open('/tmp/phone_screen.png','wb').write(base64.b64decode(d['data']['data']))
-    print('saved')
-else:
-    print('FAILED:', d)
-"
-```
-Use to show the user what's on screen. Do NOT use to derive tap coordinates.
+| Goal | Tool |
+|------|------|
+| Read screen content / find elements | **`snapshot`** first |
+| Need to interact (tap, swipe, type) | **`snapshot`** to get coordinates, then act |
+| Verify result after an action | **`screenshot`** |
+| Screen content not parseable by snapshot (e.g. images, video) | **`screenshot`** as fallback |
 
-### snapshot (UI tree)
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/snapshot \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>"}' | python3 -c "
-import sys,json
-d=json.load(sys.stdin)
-print(d['data'] if d.get('success') else d)
-"
-```
-Parse `bounds="[left,top][right,bottom]"` to get precise coordinates.
+**Rules:**
+- `snapshot` is always preferred for reading — it returns real device-pixel bounds and element text
+- **NEVER guess coordinates from a screenshot** — screenshots may be scaled; use `snapshot` bounds
+- `screenshot` is for showing results to the user, not for finding tap targets
+- If `snapshot` returns no useful elements, fall back to `screenshot` to understand the screen
 
-### tap
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/tap \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>","x":<X>,"y":<Y>}'
-```
-
-### press_key
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/press_key \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>","key":"HOME"}'
-```
-Common keys: `HOME`, `BACK`, `WAKEUP`, `ENTER`, `VOLUME_UP`, `VOLUME_DOWN`
-
-### type_text
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/type_text \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>","text":"你好"}'
-```
-Supports Chinese and emoji (uses ADBKeyboard on device).
-
-### shell
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/shell \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>","command":"am start -a android.intent.action.VIEW -d https://example.com"}'
-```
-Run arbitrary adb shell commands. Use for launching intents, checking state, etc.
-
-### swipe
-```bash
-curl -sk -X POST https://www.clawpaw.me/api/adb/swipe \
-  -H "Content-Type: application/json" \
-  -H "x-clawpaw-secret: <SECRET>" \
-  -d '{"uid":"<UID>","x1":640,"y1":1800,"x2":640,"y2":800,"duration":300}'
-```
+### Tapping elements
+1. Call `snapshot` — get element list with bounds
+2. The `tap` tool can match by `text`, `resourceId`, or `contentDesc` — use that when possible
+3. If using raw coordinates: compute center from bounds `[left,top][right,bottom]` → `x=(left+right)/2`, `y=(top+bottom)/2`
 
 ## Standard Execution Loop
 
 For any user task:
 
-1. **Wake screen** (if needed)
-   ```bash
-   # press_key WAKEUP
-   ```
-
-2. **Take screenshot** — show the user what's on screen now
-
-3. **Navigate** to the right app/screen using `shell am start` or `press_key HOME` + tap
-
-4. **Use snapshot** to find element coordinates before every tap
-
-5. **Act** — tap, type, swipe as needed
-
-6. **Verify** — take screenshot after each major action to confirm it worked
-
-7. **Repeat** until task is complete
+1. **Wake screen** — `press_key wakeup`
+2. **snapshot** — read the current screen state
+3. **Navigate** — `press_key home` + tap, or `shell am start` if needed
+4. **snapshot** — find element coordinates before acting
+5. **Act** — tap, type, swipe
+6. **screenshot** — verify the result
+7. **Repeat** until done
 
 ## Common Patterns
 
-### Open SMS and send a message
-```bash
-# 1. Open SMS composer
-shell: am start -a android.intent.action.SENDTO -d sms:<PHONE> --es sms_body <TEXT> --ez exit_on_sent true
-
-# 2. Get UI tree, find send button by content-desc="发送短信" or resource-id containing "send_button"
-# bounds="[1114,2504][1242,2632]" → tap (1178, 2568)
-
-# 3. Tap send button using exact coordinates from snapshot
+### Send an SMS
+```
+1. shell (via adb): am start -a android.intent.action.SENDTO -d sms:<PHONE> --es sms_body <TEXT> --ez exit_on_sent true
+2. snapshot → find send button by contentDesc="发送短信"
+3. tap with contentDesc="发送短信"  ← tap tool supports this directly
 ```
 
 ### Open an app
-```bash
-# shell
-am start -n <package>/<activity>
-# or
-monkey -p <package> -c android.intent.category.LAUNCHER 1
+```
+tap with text="<app name>"   ← if visible on home screen
+-- or --
+press_key home, then tap the app icon
 ```
 
-### Scroll down
-```bash
-# swipe from bottom to top
-x1=640, y1=1800, x2=640, y2=800, duration=300
+### Scroll
+```
+swipe with direction="up"   ← scroll down (swipe up)
+swipe with direction="down" ← scroll up (swipe down)
+```
+
+### Type into a field
+```
+1. tap the input field (by text/resourceId)
+2. type_text with the text to enter
 ```
 
 ## Troubleshooting
 
-| Error | Fix |
-|-------|-----|
-| `device not found` | Call `connect` endpoint first, then retry |
-| `failed to authenticate` | Phone shows "Allow USB debugging?" dialog — tell user to tap Allow |
-| Screenshot is black | Call `press_key WAKEUP` first |
-| Tap has no effect | Use `snapshot` to get exact coordinates — never guess from screenshot |
+| Symptom | Fix |
+|---------|-----|
+| Screen is black / screenshot all dark | `press_key wakeup` first |
+| Tap has no effect | Use `snapshot` → tap by `text` or `contentDesc` instead of coordinates |
+| Element not found by text | Try `snapshot` to see all visible elements and their exact text |

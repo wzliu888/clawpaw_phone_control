@@ -26,11 +26,11 @@ export const tools: Tool[] = [
   },
   {
     name: 'flashlight',
-    description: 'Get or toggle flashlight.',
+    description: 'Get or set flashlight. Pass on=true to turn on, on=false to turn off. Omit to get current state.',
     inputSchema: {
       type: 'object',
       properties: {
-        on: { type: 'boolean', description: 'true=on, false=off. Omit to get current state.' },
+        on: { type: 'boolean', description: 'true=on, false=off. Omit to get current state. Do NOT pass "action" or any other field — only "on".' },
       },
     },
   },

@@ -160,8 +160,8 @@ class SshTunnelManager {
                 setPassword(config.password)
                 setConfig(Properties().apply {
                     put("StrictHostKeyChecking", "no")
-                    put("ServerAliveInterval", "10")
-                    put("ServerAliveCountMax", "3")
+                    put("ServerAliveInterval", "30")
+                    put("ServerAliveCountMax", "10")
                 })
                 connect(10_000)
                 // Reverse tunnel: server:remoteAdbPort → phone:5555
@@ -192,7 +192,7 @@ class SshTunnelManager {
         heartbeatJob = scope!!.launch {
             var probeCount = 0
             while (isActive && shouldReconnect) {
-                delay(20_000L)
+                delay(60_000L)
                 probeCount++
                 Log.d(TAG, "Heartbeat probe #$probeCount")
                 ConnectionLog.log("SSH", "probe #$probeCount")
