@@ -11,12 +11,11 @@ class AuthRepository(private val backendBaseUrl: String) {
     private val client = OkHttpClient()
     private val json = "application/json".toMediaType()
 
-    data class LoginResult(val uid: String)
+    data class LoginResult(val uid: String, val secret: String)
 
-    /** Anonymous login — registers a device by its generated UUID. */
-    fun loginAnonymous(deviceId: String): LoginResult {
-        val body = JSONObject().apply { put("deviceId", deviceId) }
-            .toString().toRequestBody(json)
+    /** Anonymous login — backend creates a new uid + secret for each fresh install. */
+    fun loginAnonymous(): LoginResult {
+        val body = JSONObject().toString().toRequestBody(json)
 
         val request = Request.Builder()
             .url("$backendBaseUrl/api/auth/anonymous")
@@ -26,7 +25,8 @@ class AuthRepository(private val backendBaseUrl: String) {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("Anonymous login failed: ${response.code}")
             val rb = response.body?.string() ?: error("Empty response")
-            return LoginResult(uid = JSONObject(rb).getString("uid"))
+            val obj = JSONObject(rb)
+            return LoginResult(uid = obj.getString("uid"), secret = obj.getString("secret"))
         }
     }
 

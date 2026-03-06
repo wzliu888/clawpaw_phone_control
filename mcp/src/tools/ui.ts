@@ -4,7 +4,7 @@ import { sendAdb } from '../mobile_client.js';
 export const tools: Tool[] = [
   {
     name: 'snapshot',
-    description: 'Get the current screen UI element tree. Returns a formatted list of all visible elements with text, resource IDs, bounds, and clickable state. Call this before interacting with elements.',
+    description: 'Get the current screen UI element tree. Returns all visible elements with text, resource IDs, bounds, and clickable state. ALWAYS call this before tapping or typing — use the real bounds, never guess coordinates from a screenshot. Fall back to screenshot only when snapshot returns no useful elements (e.g. images, video, games).',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -51,7 +51,7 @@ export const tools: Tool[] = [
   },
   {
     name: 'type_text',
-    description: 'Type text into the focused input field. Supports Chinese, emoji, and all Unicode (requires ADBKeyboard app for non-ASCII).',
+    description: 'Type text into the focused input field. Supports Chinese, emoji, and all Unicode. REQUIRES ADBKeyboard app to be installed and set as the active input method — without it, only basic ASCII works and Chinese/emoji will fail silently. If typing fails or produces garbled output, check ADB keyboard setup: install ADBKeyboard APK, run "adb shell ime set com.android.adbkeyboard/.AdbIME", then retry.',
     inputSchema: {
       type: 'object',
       required: ['text'],
@@ -73,7 +73,7 @@ export const tools: Tool[] = [
   },
   {
     name: 'screenshot',
-    description: 'Take a screenshot of the current screen. Returns a JPEG image. Use for result verification only — use snapshot for reading UI elements.',
+    description: 'Take a screenshot of the current screen. Returns a JPEG image. FALLBACK ONLY — use snapshot first for all UI reading and element targeting. Only use screenshot when: (1) verifying a visual result the user needs to see, or (2) snapshot returns no useful elements (images, video, games, loading screens).',
     inputSchema: {
       type: 'object',
       properties: {

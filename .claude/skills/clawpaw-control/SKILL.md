@@ -42,22 +42,42 @@ The MCP tools are available directly — no curl, no API calls needed.
 - **`audio_status`** — Check if recording is in progress
 - **`sensors`** — Read accelerometer, gyroscope, light, etc.
 
+## Prerequisites — Check Before Starting
+
+### ADB connectivity
+If ADB commands fail (tap has no effect, snapshot empty), confirm:
+1. USB debugging enabled: Settings → Developer options → USB debugging
+2. Device authorized: `shell` → `adb devices` → should show `device` (not `unauthorized`)
+3. If unauthorized: disconnect/reconnect USB, accept the prompt on the phone
+
+### ADB Keyboard (required for Chinese / emoji / non-ASCII input)
+`type_text` with Chinese or emoji **requires ADBKeyboard** — standard IME cannot receive arbitrary Unicode via ADB.
+
+**Setup:**
+1. Install APK: `adb install ADBKeyboard.apk` (download from GitHub: senzhk/ADBKeyBoard)
+2. Enable in settings: Language & Input → Virtual keyboard → Manage keyboards → ADB Keyboard ON
+3. Set active: `shell` tool → `ime set com.android.adbkeyboard/.AdbIME`
+4. Verify: `shell` → `ime list -s` should include `com.android.adbkeyboard/.AdbIME`
+
+If `type_text` produces wrong output or does nothing, re-run step 3 to reactivate ADBKeyboard.
+
 ## Core Principles
 
-### snapshot vs screenshot — when to use each
+### snapshot FIRST — screenshot is a fallback
+
+**Always use `snapshot` before acting on the screen.** It returns real device-pixel bounds — use those for all taps and interactions.
 
 | Goal | Tool |
 |------|------|
-| Read screen content / find elements | **`snapshot`** first |
-| Need to interact (tap, swipe, type) | **`snapshot`** to get coordinates, then act |
-| Verify result after an action | **`screenshot`** |
-| Screen content not parseable by snapshot (e.g. images, video) | **`screenshot`** as fallback |
+| Read screen content / find elements | **`snapshot`** |
+| Tap / type / interact with elements | **`snapshot`** to get coords, then act |
+| Verify a visual result after an action | **`screenshot`** |
+| snapshot returns no useful elements (image, video, game) | **`screenshot`** as fallback |
 
 **Rules:**
-- `snapshot` is always preferred for reading — it returns real device-pixel bounds and element text
-- **NEVER guess coordinates from a screenshot** — screenshots may be scaled; use `snapshot` bounds
-- `screenshot` is for showing results to the user, not for finding tap targets
-- If `snapshot` returns no useful elements, fall back to `screenshot` to understand the screen
+- **NEVER guess coordinates from a screenshot** — screenshots may be scaled; bounds from `snapshot` are accurate
+- Do not call `screenshot` unless: (a) user needs to see the screen visually, or (b) `snapshot` returned nothing useful
+- `screenshot` is a fallback, not the default observation tool
 
 ### Tapping elements
 1. Call `snapshot` — get element list with bounds
@@ -73,8 +93,9 @@ For any user task:
 3. **Navigate** — `press_key home` + tap, or `shell am start` if needed
 4. **snapshot** — find element coordinates before acting
 5. **Act** — tap, type, swipe
-6. **screenshot** — verify the result
-7. **Repeat** until done
+6. **snapshot** — verify result by reading updated UI state
+7. **screenshot** — only if the user needs to see the screen visually, or snapshot gives no useful info
+8. **Repeat** until done
 
 ## Common Patterns
 
@@ -111,3 +132,6 @@ swipe with direction="down" ← scroll up (swipe down)
 | Screen is black / screenshot all dark | `press_key wakeup` first |
 | Tap has no effect | Use `snapshot` → tap by `text` or `contentDesc` instead of coordinates |
 | Element not found by text | Try `snapshot` to see all visible elements and their exact text |
+| Chinese / emoji not typed correctly | ADBKeyboard not active — run `shell`: `ime set com.android.adbkeyboard/.AdbIME` |
+| type_text does nothing | ADBKeyboard not installed — see Prerequisites section above |
+| ADB commands silently fail | Check `adb devices` — device may be unauthorized; reconnect USB and accept prompt |

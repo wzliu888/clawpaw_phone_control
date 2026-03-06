@@ -23,7 +23,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import android.provider.Settings
 
 private const val TAG = "MainActivity"
 
@@ -114,6 +113,8 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         wsService?.setStatusListener(null)
         wsService?.setSshStatusListener(null)
+        breathAnimators.values.forEach { it.cancel() }
+        breathAnimators.clear()
         runCatching { unbindService(serviceConnection) }
         super.onDestroy()
     }
@@ -182,25 +183,19 @@ class MainActivity : AppCompatActivity() {
     // ── Anonymous registration ────────────────────────────────────────────────
 
     private fun registerAnonymous() {
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         showLoading("Connecting…")
         lifecycleScope.launch {
             try {
                 val loginResult = withContext(Dispatchers.IO) {
-                    authRepository.loginAnonymous(deviceId)
+                    authRepository.loginAnonymous()
                 }
-                setLoadingText("Setting up your session…")
-                val secret = withContext(Dispatchers.IO) {
-                    authRepository.fetchSecret(loginResult.uid)
-                } ?: withContext(Dispatchers.IO) {
-                    authRepository.generateSecret(loginResult.uid)
-                }
-                // Persist uid + secret
+                // Persist uid + secret (both returned by the registration endpoint)
                 getSharedPreferences("ssh_config", MODE_PRIVATE).edit().apply {
                     putString("uid", loginResult.uid)
-                    putString("secret", secret)
+                    putString("secret", loginResult.secret)
                     apply()
                 }
+                val secret = loginResult.secret
                 setLoadingText("Provisioning SSH tunnel…")
                 try {
                     val creds = withContext(Dispatchers.IO) {
@@ -456,6 +451,29 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // ── Status dot breath animation ───────────────────────────────────────────
+
+    private val breathAnimators = mutableMapOf<android.widget.ImageView, android.animation.ValueAnimator>()
+
+    private fun startBreathAnimation(dot: android.widget.ImageView) {
+        if (breathAnimators[dot]?.isRunning == true) return
+        val anim = android.animation.ValueAnimator.ofFloat(1f, 0.45f, 1f).apply {
+            duration = 2200
+            repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addUpdateListener { dot.alpha = it.animatedValue as Float }
+        }
+        breathAnimators[dot] = anim
+        anim.start()
+    }
+
+    private fun stopBreathAnimation(dot: android.widget.ImageView) {
+        breathAnimators.remove(dot)?.cancel()
+        dot.alpha = 1f
+    }
+
+    // ── Status updates ────────────────────────────────────────────────────────
+
     private fun updateSshStatus(state: SshTunnelManager.State) {
         val dot = findViewById<android.widget.ImageView>(R.id.ivSshStatusDot)
         val tv = findViewById<TextView>(R.id.tvSshStatus)
@@ -465,22 +483,26 @@ class MainActivity : AppCompatActivity() {
                 dot.setImageResource(R.drawable.ic_status_connected)
                 tv.text = "Active"
                 btn.visibility = View.GONE
+                startBreathAnimation(dot)
             }
             SshTunnelManager.State.CONNECTING -> {
                 dot.setImageResource(R.drawable.ic_status_connecting)
                 tv.text = "Establishing tunnel…"
                 btn.visibility = View.GONE
+                stopBreathAnimation(dot)
             }
             SshTunnelManager.State.ERROR -> {
                 dot.setImageResource(R.drawable.ic_status_disconnected)
                 val err = wsService?.sshLastError()
                 tv.text = if (err != null) "Error: $err" else "Failed to connect"
                 btn.visibility = View.VISIBLE
+                stopBreathAnimation(dot)
             }
             SshTunnelManager.State.DISCONNECTED -> {
                 dot.setImageResource(R.drawable.ic_status_disconnected)
                 tv.text = "Disconnected"
                 btn.visibility = View.VISIBLE
+                stopBreathAnimation(dot)
             }
         }
     }
@@ -493,10 +515,12 @@ class MainActivity : AppCompatActivity() {
             dot.setImageResource(R.drawable.ic_status_connected)
             tv.text = "Connected"
             btn.visibility = View.GONE
+            startBreathAnimation(dot)
         } else {
             dot.setImageResource(R.drawable.ic_status_connecting)
             tv.text = "Reconnecting…"
             btn.visibility = View.GONE
+            stopBreathAnimation(dot)
         }
     }
 
