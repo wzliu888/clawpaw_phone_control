@@ -47,6 +47,7 @@ class AuthRepository(private val backendBaseUrl: String) {
             .build()
 
         client.newCall(request).execute().use { response ->
+            if (response.code == 403) error("vip_required")
             if (!response.isSuccessful) error("SSH provision failed: ${response.code}")
             val rb = response.body?.string() ?: error("Empty response")
             val obj = JSONObject(rb)

@@ -22,7 +22,7 @@ const pending = new Map<string, {
 export function initWsServer(httpServer: Server): void {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+  wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
     const uid = getUidFromRequest(req);
 
     if (!uid) {

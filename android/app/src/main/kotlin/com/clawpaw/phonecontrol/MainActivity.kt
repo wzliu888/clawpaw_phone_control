@@ -70,11 +70,40 @@ class MainActivity : AppCompatActivity() {
         val savedUid = prefs.getString("uid", null)
 
         if (savedUid != null) {
-            // Already registered — go straight to logged-in UI
+            // Already registered — check VIP before starting services
             Log.i(TAG, "Found saved uid=$savedUid, skipping login")
             val savedSecret = prefs.getString("secret", null)
             val hasUsername = !prefs.getString("username", "").isNullOrBlank()
-            onLoginSuccess(savedUid, savedSecret)
+
+            lifecycleScope.launch {
+                // Only enforce VIP if using default host
+                val savedHost = prefs.getString("host", "").orEmpty()
+                val usingDefaultHost = savedHost.isBlank() || savedHost == BuildConfig.SSH_HOST
+                if (usingDefaultHost) {
+                    val vipStatus = try {
+                        withContext(Dispatchers.IO) { authRepository.getVipStatus(savedUid) }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "VIP check failed, allowing start: ${e.message}")
+                        null // network error — allow through rather than blocking user
+                    }
+                    val isValid = vipStatus == null || (
+                        (vipStatus.status == "trial" && (vipStatus.days_left ?: 0) > 0) ||
+                        vipStatus.status == "active"
+                    )
+                    if (!isValid) {
+                        Log.w(TAG, "VIP expired on cold start with default host, blocking services")
+                        onLoginSuccess(savedUid, savedSecret, startService = false)
+                        val ivSshSettings = findViewById<android.widget.ImageView>(R.id.ivSshSettings)
+                        ivSshSettings.setColorFilter(0xFFFFCC44.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            showSshSettingsDialog(showUpgradeHint = true)
+                        }, 600)
+                        return@launch
+                    }
+                }
+                onLoginSuccess(savedUid, savedSecret, startService = true)
+            }
+
             // If SSH credentials are missing, re-provision in background
             if (!hasUsername && savedSecret != null && savedSecret != "null") {
                 lifecycleScope.launch {
@@ -98,7 +127,12 @@ class MainActivity : AppCompatActivity() {
                             prefs.getInt("port", 22)
                         )
                     } catch (e: Exception) {
-                        Log.w(TAG, "SSH re-provision failed: ${e.message}")
+                        if (e.message == "vip_required") {
+                            Log.w(TAG, "SSH re-provision blocked: VIP required")
+                            Toast.makeText(this@MainActivity, "VIP subscription required to use Default host", Toast.LENGTH_LONG).show()
+                        } else {
+                            Log.w(TAG, "SSH re-provision failed: ${e.message}")
+                        }
                     }
                 }
             }
@@ -214,7 +248,12 @@ class MainActivity : AppCompatActivity() {
                     }
                     Log.i(TAG, "SSH provisioned: user=${creds.username}")
                 } catch (e: Exception) {
-                    Log.w(TAG, "SSH provision failed (non-fatal): ${e.message}")
+                    if (e.message == "vip_required") {
+                        Log.w(TAG, "SSH provision blocked: VIP required")
+                        Toast.makeText(this@MainActivity, "VIP subscription required to use Default host", Toast.LENGTH_LONG).show()
+                    } else {
+                        Log.w(TAG, "SSH provision failed (non-fatal): ${e.message}")
+                    }
                 }
                 setLoadingText("Almost there…")
                 hideLoading()
@@ -230,7 +269,7 @@ class MainActivity : AppCompatActivity() {
 
     // ── Post-login ───────────────────────────────────────────────────────────
 
-    private fun onLoginSuccess(uid: String, secret: String?) {
+    private fun onLoginSuccess(uid: String, secret: String?, startService: Boolean = true) {
         currentUid = uid
         findViewById<Button>(R.id.btnConnect).visibility = View.GONE
         findViewById<View>(R.id.layoutLoggedIn).visibility = View.VISIBLE
@@ -298,10 +337,12 @@ class MainActivity : AppCompatActivity() {
             wsService?.reconnectSsh()
         }
 
-        // Start foreground service
-        val intent = Intent(this, WsService::class.java).apply { putExtra("uid", uid) }
-        startForegroundService(intent)
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+        // Start foreground service (skipped if VIP expired)
+        if (startService) {
+            val intent = Intent(this, WsService::class.java).apply { putExtra("uid", uid) }
+            startForegroundService(intent)
+            bindService(intent, serviceConnection, BIND_AUTO_CREATE)
+        }
     }
 
     private fun logout() {
@@ -462,7 +503,7 @@ class MainActivity : AppCompatActivity() {
 
     // ── SSH advanced settings dialog ─────────────────────────────────────────
 
-    private fun showSshSettingsDialog() {
+    private fun showSshSettingsDialog(showUpgradeHint: Boolean = false) {
         val prefs = getSharedPreferences("ssh_config", MODE_PRIVATE)
         val dp = resources.displayMetrics.density
         val savedHost = prefs.getString("host", "") ?: ""
@@ -566,6 +607,7 @@ class MainActivity : AppCompatActivity() {
         }
         val btnUpgrade = Button(this).apply {
             text = "Upgrade"
+            tag = "vip_upgrade_btn"
             textSize = 10f
             setTextColor(0xFFFFFFFF.toInt())
             isAllCaps = false
@@ -591,6 +633,92 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(optionDefault)
+
+        // Declared here so it's available to the VIP load block below
+        val dialog = AlertDialog.Builder(this).setView(root).create()
+
+        fun showUpgradeOverlay() {
+            // btnUpgrade is already VISIBLE when this is called; post to get final coords
+            btnUpgrade.post {
+                val decorView = dialog.window?.decorView as? android.view.ViewGroup ?: return@post
+
+                // getLocationInWindow gives coords relative to the dialog's window (decorView origin)
+                val btnLoc = IntArray(2)
+                btnUpgrade.getLocationInWindow(btnLoc)
+                val bx = btnLoc[0].toFloat() - dp * 10
+                val by = btnLoc[1].toFloat() - dp * 6
+                val bw = btnUpgrade.width.toFloat() + dp * 20
+                val bh = btnUpgrade.height.toFloat() + dp * 12
+                val btnCenterX = bx + bw / 2
+
+                var bounceOffset = 0f
+                var bounceAnim: android.animation.ValueAnimator? = null
+
+                val overlayView = object : android.view.View(this@MainActivity) {
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    override fun onDraw(canvas: android.graphics.Canvas) {
+                        // Semi-transparent scrim (lighter)
+                        paint.style = android.graphics.Paint.Style.FILL
+                        paint.color = 0x88000000.toInt()
+                        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+
+                        // Outer glow ring
+                        paint.style = android.graphics.Paint.Style.STROKE
+                        paint.strokeWidth = dp * 8
+                        paint.color = 0x44FFCC44
+                        canvas.drawRoundRect(bx - dp * 4, by - dp * 4, bx + bw + dp * 4, by + bh + dp * 4, dp * 24, dp * 24, paint)
+
+                        // Gold border
+                        paint.strokeWidth = dp * 2.5f
+                        paint.color = 0xFFFFCC44.toInt()
+                        canvas.drawRoundRect(bx, by, bx + bw, by + bh, dp * 20, dp * 20, paint)
+
+                        // Bouncing arrow
+                        val arrowTipY = by - dp * 14 + bounceOffset
+                        val arrowBaseY = arrowTipY - dp * 22
+                        paint.strokeWidth = dp * 3
+                        paint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        paint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        paint.color = 0xFFFFCC44.toInt()
+                        val path = android.graphics.Path().apply {
+                            moveTo(btnCenterX, arrowTipY); lineTo(btnCenterX, arrowBaseY)
+                            moveTo(btnCenterX - dp * 10, arrowTipY - dp * 11)
+                            lineTo(btnCenterX, arrowTipY)
+                            lineTo(btnCenterX + dp * 10, arrowTipY - dp * 11)
+                        }
+                        canvas.drawPath(path, paint)
+
+                        // Label
+                        paint.style = android.graphics.Paint.Style.FILL
+                        paint.textSize = dp * 13
+                        paint.textAlign = android.graphics.Paint.Align.CENTER
+                        paint.color = 0xFFFFCC44.toInt()
+                        canvas.drawText("Tap to renew VIP", btnCenterX, arrowBaseY - dp * 8, paint)
+                    }
+                }.also { v ->
+                    v.layoutParams = android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                    v.setOnClickListener {
+                        bounceAnim?.cancel()
+                        (v.parent as? android.view.ViewGroup)?.removeView(v)
+                    }
+                }
+
+                bounceAnim = android.animation.ValueAnimator.ofFloat(0f, -dp * 8, 0f).apply {
+                    duration = 900
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                    addUpdateListener { bounceOffset = it.animatedValue as Float; overlayView.invalidate() }
+                }
+
+                // Add directly to decorView (already full-screen), NOT to android.R.id.content
+                // which would stretch the dialog
+                decorView.addView(overlayView)
+                bounceAnim.start()
+            }
+        }
 
         // Load VIP status async
         if (uid != null) {
@@ -662,6 +790,7 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
                         }
+                        if (showUpgradeHint) showUpgradeOverlay()
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "[VIP] load failed: ${e.message}", e)
@@ -675,10 +804,7 @@ class MainActivity : AppCompatActivity() {
                                 val checkoutUrl = withContext(Dispatchers.IO) {
                                     authRepository.createVipCheckout(uid, httpBaseUrl.trimEnd('/'))
                                 }
-                                androidx.browser.customtabs.CustomTabsIntent.Builder()
-                                    .setShowTitle(true)
-                                    .build()
-                                    .launchUrl(this@MainActivity, android.net.Uri.parse(checkoutUrl))
+                                openCheckoutInWebView(checkoutUrl)
                             } catch (ex: Exception) {
                                 Toast.makeText(this@MainActivity, "Failed: ${ex.message}", Toast.LENGTH_SHORT).show()
                             } finally {
@@ -687,6 +813,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
+                    if (showUpgradeHint) showUpgradeOverlay()
                 }
             }
         } else {
@@ -812,8 +939,6 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, (20 * dp).toInt(), 0, 0)
         }
 
-        val dialog = AlertDialog.Builder(this).setView(root).create()
-
         btnRow.addView(Button(this).apply {
             text = "Cancel"
             textSize = 13f
@@ -865,6 +990,7 @@ class MainActivity : AppCompatActivity() {
             setColor(0xFF131318.toInt())
             cornerRadius = 20 * dp
         })
+
     }
 
     // ── Status dot breath animation ───────────────────────────────────────────
