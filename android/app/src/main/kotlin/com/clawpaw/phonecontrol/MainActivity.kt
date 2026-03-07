@@ -66,6 +66,21 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Splash entrance: logo scales up + fades in, then name + tagline stagger in
+        val dp = resources.displayMetrics.density
+        val logo = findViewById<View>(R.id.ivLogo)
+        val tvName = findViewById<View>(R.id.tvAppName)
+        val tvTag = findViewById<View>(R.id.tvTagline)
+        logo.scaleX = 0.6f; logo.scaleY = 0.6f
+        logo.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420)
+            .setInterpolator(android.view.animation.OvershootInterpolator(1.4f)).setStartDelay(80).start()
+        tvName.translationY = dp * 12
+        tvName.animate().alpha(1f).translationY(0f).setDuration(340)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).setStartDelay(260).start()
+        tvTag.translationY = dp * 10
+        tvTag.animate().alpha(1f).translationY(0f).setDuration(300)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).setStartDelay(380).start()
+
         val prefs = getSharedPreferences("ssh_config", MODE_PRIVATE)
         val savedUid = prefs.getString("uid", null)
 
@@ -74,6 +89,8 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "Found saved uid=$savedUid, skipping login")
             val savedSecret = prefs.getString("secret", null)
             val hasUsername = !prefs.getString("username", "").isNullOrBlank()
+
+            showLoading("Starting…")
 
             lifecycleScope.launch {
                 // Only enforce VIP if using default host
@@ -193,10 +210,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoading(text: String) {
-        findViewById<Button>(R.id.btnConnect).visibility = View.GONE
+        val btn = findViewById<Button>(R.id.btnConnect)
+        btn.animate().alpha(0f).setDuration(180).withEndAction { btn.visibility = View.GONE; btn.alpha = 1f }.start()
         val layout = findViewById<View>(R.id.layoutLoading)
+        layout.alpha = 0f
         layout.visibility = View.VISIBLE
-        layout.animate().alpha(1f).setDuration(300).start()
+        layout.animate().alpha(1f).setDuration(300).setStartDelay(120).start()
         setLoadingText(text)
         startPulseAnimation()
     }
@@ -256,7 +275,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 setLoadingText("Almost there…")
-                hideLoading()
                 onLoginSuccess(loginResult.uid, secret)
             } catch (e: Exception) {
                 Log.e(TAG, "Register failed: ${e.message}")
@@ -271,8 +289,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun onLoginSuccess(uid: String, secret: String?, startService: Boolean = true) {
         currentUid = uid
+        hideLoading()
         findViewById<Button>(R.id.btnConnect).visibility = View.GONE
-        findViewById<View>(R.id.layoutLoggedIn).visibility = View.VISIBLE
+        val layoutLoggedIn = findViewById<View>(R.id.layoutLoggedIn)
+        val dp2 = resources.displayMetrics.density
+        layoutLoggedIn.alpha = 0f
+        layoutLoggedIn.translationY = dp2 * 24
+        layoutLoggedIn.visibility = View.VISIBLE
+        layoutLoggedIn.animate().alpha(1f).translationY(0f).setDuration(380)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).setStartDelay(60).start()
 
         findViewById<TextView>(R.id.tvUid).text = uid
         updateSecretDisplay(secret)
@@ -774,14 +799,15 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "[VIP] showing upgrade button")
                         btnUpgrade.visibility = View.VISIBLE
                         btnUpgrade.setOnClickListener {
+                            btnUpgrade.isEnabled = false
+                            btnUpgrade.text = "…"
+                            val loadUrl = openCheckoutDialog()
                             lifecycleScope.launch {
                                 try {
-                                    btnUpgrade.isEnabled = false
-                                    btnUpgrade.text = "…"
                                     val checkoutUrl = withContext(Dispatchers.IO) {
                                         authRepository.createVipCheckout(uid, httpBaseUrl.trimEnd('/'))
                                     }
-                                    openCheckoutInWebView(checkoutUrl)
+                                    loadUrl(checkoutUrl)
                                 } catch (e: Exception) {
                                     Toast.makeText(this@MainActivity, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
                                 } finally {
@@ -797,14 +823,15 @@ class MainActivity : AppCompatActivity() {
                     tvVipStatus.text = "—"
                     btnUpgrade.visibility = View.VISIBLE
                     btnUpgrade.setOnClickListener {
+                        btnUpgrade.isEnabled = false
+                        btnUpgrade.text = "…"
+                        val loadUrl = openCheckoutDialog()
                         lifecycleScope.launch {
                             try {
-                                btnUpgrade.isEnabled = false
-                                btnUpgrade.text = "…"
                                 val checkoutUrl = withContext(Dispatchers.IO) {
                                     authRepository.createVipCheckout(uid, httpBaseUrl.trimEnd('/'))
                                 }
-                                openCheckoutInWebView(checkoutUrl)
+                                loadUrl(checkoutUrl)
                             } catch (ex: Exception) {
                                 Toast.makeText(this@MainActivity, "Failed: ${ex.message}", Toast.LENGTH_SHORT).show()
                             } finally {
@@ -1229,8 +1256,12 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    /** Open a URL inside the app using a full-screen WebView dialog. */
-    private fun openCheckoutInWebView(url: String) {
+    /**
+     * Open the checkout WebView dialog immediately (shows loading animation),
+     * and return a lambda that loads the URL once it's ready.
+     * Call the returned lambda from a coroutine after fetching the checkout URL.
+     */
+    private fun openCheckoutDialog(): (String) -> Unit {
         val dp = resources.displayMetrics.density
 
         // Root container
@@ -1359,7 +1390,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.loadUrl(url)
         dialog.show()
+
+        return { url -> webView.loadUrl(url) }
     }
 }

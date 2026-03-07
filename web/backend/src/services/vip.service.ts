@@ -126,9 +126,12 @@ export class VipService {
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice;
         const subscriptionId = (invoice as any).subscription as string | undefined;
-        if (subscriptionId && invoice.lines.data[0]?.period?.end) {
+        const customerId = (invoice as any).customer as string | undefined;
+        if (subscriptionId && customerId && invoice.lines.data[0]?.period?.end) {
           const periodEnd = new Date(invoice.lines.data[0].period.end * 1000);
-          await this.repo.renewPeriod(subscriptionId, periodEnd);
+          // Use activate so that stripe_subscription_id is always written,
+          // even if invoice.paid races ahead of customer.subscription.created
+          await this.repo.activate(subscriptionId, customerId, periodEnd);
         }
         break;
       }
