@@ -30,7 +30,7 @@ export class VipService {
     const vip = await this.repo.findByUid(uid);
     if (!vip) return { status: 'none', trial_ends_at: null, current_period_end: null, days_left: null };
 
-    // Auto-expire trial if past end date
+    // Auto-expire trial or active subscription if past end date
     const now = new Date();
     if (vip.status === 'trial' && vip.trial_ends_at && vip.trial_ends_at < now) {
       await pool.query('UPDATE vip_subscriptions SET status = ? WHERE uid = ?', ['expired', uid]);
@@ -38,6 +38,15 @@ export class VipService {
         status: 'expired',
         trial_ends_at: vip.trial_ends_at.toISOString(),
         current_period_end: null,
+        days_left: 0,
+      };
+    }
+    if (vip.status === 'active' && vip.current_period_end && vip.current_period_end < now) {
+      await pool.query('UPDATE vip_subscriptions SET status = ? WHERE uid = ?', ['expired', uid]);
+      return {
+        status: 'expired',
+        trial_ends_at: vip.trial_ends_at?.toISOString() ?? null,
+        current_period_end: vip.current_period_end.toISOString(),
         days_left: 0,
       };
     }

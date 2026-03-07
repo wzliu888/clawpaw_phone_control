@@ -601,7 +601,10 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "[VIP] status=${status.status} days_left=${status.days_left}")
                     tvVipStatus.text = when (status.status) {
                         "trial" -> if ((status.days_left ?: 0) > 0) "Trial · ${status.days_left}d left" else "Trial ended"
-                        "active" -> "⚡ VIP Active"
+                        "active" -> {
+                            val d = status.days_left ?: 0
+                            "⚡ VIP Active  ·  Renews in ${if (d <= 1) "today" else "$d days"}"
+                        }
                         "canceled", "expired" -> "VIP Expired"
                         else -> "—"
                     }
@@ -610,6 +613,35 @@ class MainActivity : AppCompatActivity() {
                         "trial" -> 0xFF888888.toInt()
                         else -> 0xFF555555.toInt()
                     })
+                    if (status.status == "active") {
+                        val goldBg = android.graphics.drawable.GradientDrawable().apply {
+                            setColor(0xFF1A1400.toInt())
+                            cornerRadius = 10 * dp
+                            setStroke((2 * dp).toInt(), 0xFFFFCC44.toInt())
+                        }
+                        optionDefault.background = goldBg
+
+                        // Animate both background fill and border together
+                        val bgAnim = android.animation.ValueAnimator.ofArgb(
+                            0xFF0F0C00.toInt(), 0xFF2E2000.toInt(), 0xFF0F0C00.toInt()
+                        ).apply {
+                            duration = 2000
+                            repeatCount = android.animation.ValueAnimator.INFINITE
+                            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                            addUpdateListener { goldBg.setColor(it.animatedValue as Int) }
+                        }
+                        val borderAnim = android.animation.ValueAnimator.ofArgb(
+                            0xFF886600.toInt(), 0xFFFFEE44.toInt(), 0xFF886600.toInt()
+                        ).apply {
+                            duration = 2000
+                            repeatCount = android.animation.ValueAnimator.INFINITE
+                            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                            addUpdateListener { goldBg.setStroke((2 * dp).toInt(), it.animatedValue as Int) }
+                        }
+                        android.animation.AnimatorSet().apply {
+                            playTogether(bgAnim, borderAnim)
+                        }.start()
+                    }
                     if (status.status != "active") {
                         Log.d(TAG, "[VIP] showing upgrade button")
                         btnUpgrade.visibility = View.VISIBLE
