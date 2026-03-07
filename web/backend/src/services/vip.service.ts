@@ -137,10 +137,10 @@ export class VipService {
   private daysLeft(vip: VipSubscription): number | null {
     const now = new Date();
     if (vip.status === 'trial' && vip.trial_ends_at) {
-      return Math.max(0, Math.ceil((vip.trial_ends_at.getTime() - now.getTime()) / 86400000));
+      return Math.max(0, Math.floor((vip.trial_ends_at.getTime() - now.getTime()) / 86400000));
     }
     if (vip.status === 'active' && vip.current_period_end) {
-      return Math.max(0, Math.ceil((vip.current_period_end.getTime() - now.getTime()) / 86400000));
+      return Math.max(0, Math.floor((vip.current_period_end.getTime() - now.getTime()) / 86400000));
     }
     return null;
   }
