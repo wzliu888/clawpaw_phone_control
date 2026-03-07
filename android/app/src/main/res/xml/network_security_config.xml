@@ -4,6 +4,7 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">192.168.3.61</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">www.clawpaw.me</domain>
     </domain-config>

@@ -92,4 +92,48 @@ class AuthRepository(private val backendBaseUrl: String) {
             return secret.ifBlank { null }
         }
     }
+
+    data class VipStatus(
+        val status: String,
+        val trial_ends_at: String?,
+        val current_period_end: String?,
+        val days_left: Int?
+    )
+
+    fun getVipStatus(uid: String): VipStatus {
+        val request = Request.Builder()
+            .url("$backendBaseUrl/api/vip/status?uid=$uid")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("getVipStatus failed: ${response.code}")
+            val obj = JSONObject(response.body?.string() ?: error("Empty response"))
+            return VipStatus(
+                status = obj.optString("status", "none"),
+                trial_ends_at = obj.optString("trial_ends_at").ifBlank { null },
+                current_period_end = obj.optString("current_period_end").ifBlank { null },
+                days_left = if (obj.isNull("days_left")) null else obj.getInt("days_left")
+            )
+        }
+    }
+
+    /** Create a Stripe Checkout session and return the hosted URL. */
+    fun createVipCheckout(uid: String, returnUrl: String): String {
+        val body = JSONObject().apply {
+            put("uid", uid)
+            put("return_url", returnUrl)
+        }.toString().toRequestBody(json)
+
+        val request = Request.Builder()
+            .url("$backendBaseUrl/api/vip/checkout")
+            .post(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("createVipCheckout failed: ${response.code}")
+            val obj = JSONObject(response.body?.string() ?: error("Empty response"))
+            return obj.getString("url")
+        }
+    }
 }

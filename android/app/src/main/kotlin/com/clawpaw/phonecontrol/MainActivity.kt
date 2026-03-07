@@ -87,14 +87,14 @@ class MainActivity : AppCompatActivity() {
                             putString("password", creds.password)
                             putInt("adb_port", creds.adbPort)
                             if (prefs.getString("host", "").isNullOrBlank()) {
-                                putString("host", "47.250.13.82")
+                                putString("host", BuildConfig.SSH_HOST)
                                 putInt("port", 22)
                             }
                             apply()
                         }
                         Log.i(TAG, "SSH re-provisioned: user=${creds.username}")
                         wsService?.saveSshConfig(
-                            prefs.getString("host", "47.250.13.82") ?: "47.250.13.82",
+                            prefs.getString("host", BuildConfig.SSH_HOST) ?: BuildConfig.SSH_HOST,
                             prefs.getInt("port", 22)
                         )
                     } catch (e: Exception) {
@@ -207,7 +207,7 @@ class MainActivity : AppCompatActivity() {
                         putInt("adb_port", creds.adbPort)
                         val prefs2 = getSharedPreferences("ssh_config", MODE_PRIVATE)
                         if (prefs2.getString("host", "").isNullOrBlank()) {
-                            putString("host", "47.250.13.82")
+                            putString("host", BuildConfig.SSH_HOST)
                             putInt("port", 22)
                         }
                         apply()
@@ -271,9 +271,18 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
-        // Debug info
-        findViewById<Button>(R.id.btnDebug).setOnClickListener {
-            showDebugDialog()
+        // SSH advanced settings
+        findViewById<android.widget.ImageView>(R.id.ivSshSettings).setOnClickListener {
+            showSshSettingsDialog()
+        }
+
+        // Debug info (only in debug builds)
+        val btnDebug = findViewById<Button>(R.id.btnDebug)
+        if (BuildConfig.DEBUG) {
+            btnDebug.visibility = android.view.View.VISIBLE
+            btnDebug.setOnClickListener { showDebugDialog() }
+        } else {
+            btnDebug.visibility = android.view.View.GONE
         }
 
         // Logout
@@ -445,6 +454,381 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
 
         // Apply rounded background after show
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF131318.toInt())
+            cornerRadius = 20 * dp
+        })
+    }
+
+    // ── SSH advanced settings dialog ─────────────────────────────────────────
+
+    private fun showSshSettingsDialog() {
+        val prefs = getSharedPreferences("ssh_config", MODE_PRIVATE)
+        val dp = resources.displayMetrics.density
+        val savedHost = prefs.getString("host", "") ?: ""
+        var useCustom = savedHost.isNotBlank() && savedHost != BuildConfig.SSH_HOST
+        val uid = currentUid
+
+        fun optionBg(selected: Boolean) = android.graphics.drawable.GradientDrawable().apply {
+            setColor(if (selected) 0xFF1E1E26.toInt() else 0xFF0A0A0F.toInt())
+            cornerRadius = 10 * dp
+            setStroke((1 * dp).toInt(), if (selected) 0xFFDC3232.toInt() else 0xFF2A2A35.toInt())
+        }
+
+        val root = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(0xFF131318.toInt())
+            setPadding((24 * dp).toInt(), (24 * dp).toInt(), (24 * dp).toInt(), (20 * dp).toInt())
+        }
+
+        root.addView(TextView(this).apply {
+            text = "SSH Tunnel"
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(0xFFFFFFFF.toInt())
+            setPadding(0, 0, 0, (16 * dp).toInt())
+        })
+
+        // ── Option: Default host (contains VIP status row at bottom) ─────────
+        val optionDefault = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            background = optionBg(!useCustom)
+            setPadding((14 * dp).toInt(), (12 * dp).toInt(), (14 * dp).toInt(), (12 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = (8 * dp).toInt() }
+            isClickable = true
+            isFocusable = true
+        }
+
+        // Top row: radio + labels
+        val topRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val radioDefault = android.widget.RadioButton(this).apply {
+            isChecked = !useCustom
+            isClickable = false
+            isFocusable = false
+            buttonTintList = android.content.res.ColorStateList.valueOf(0xFFDC3232.toInt())
+        }
+        topRow.addView(radioDefault)
+        topRow.addView(android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.marginStart = (10 * dp).toInt() }
+            addView(TextView(this@MainActivity).apply {
+                text = "Default host"
+                textSize = 13f
+                setTextColor(0xFFFFFFFF.toInt())
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Powered by ClawPaw"
+                textSize = 11f
+                setTextColor(0xFF666666.toInt())
+                setPadding(0, (2 * dp).toInt(), 0, 0)
+            })
+        })
+        optionDefault.addView(topRow)
+
+        // Divider
+        val vipDivider = android.view.View(this).apply {
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                (1 * dp).toInt()
+            ).also { it.topMargin = (10 * dp).toInt(); it.bottomMargin = (10 * dp).toInt() }
+            setBackgroundColor(0xFF2A2A35.toInt())
+        }
+        optionDefault.addView(vipDivider)
+
+        // VIP status row: label on left, Upgrade button on right
+        val vipRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val tvVipStatus = TextView(this).apply {
+            text = "…"
+            textSize = 11f
+            setTextColor(0xFF888888.toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .also { it.marginStart = (4 * dp).toInt() }
+        }
+        val btnUpgrade = Button(this).apply {
+            text = "Upgrade"
+            textSize = 10f
+            setTextColor(0xFFFFFFFF.toInt())
+            isAllCaps = false
+            visibility = View.GONE
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFDC3232.toInt())
+                cornerRadius = 20 * dp
+            }
+            setPadding((10 * dp).toInt(), (3 * dp).toInt(), (10 * dp).toInt(), (3 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        vipRow.addView(tvVipStatus)
+        vipRow.addView(btnUpgrade)
+        optionDefault.addView(vipRow)
+
+        // Hide VIP section if custom is already selected on open
+        if (useCustom) {
+            vipDivider.visibility = android.view.View.GONE
+            vipRow.visibility = android.view.View.GONE
+        }
+
+        root.addView(optionDefault)
+
+        // Load VIP status async
+        if (uid != null) {
+            lifecycleScope.launch {
+                Log.d(TAG, "[VIP] starting load for uid=$uid httpBaseUrl=$httpBaseUrl")
+                try {
+                    val status = withContext(Dispatchers.IO) { authRepository.getVipStatus(uid) }
+                    Log.d(TAG, "[VIP] status=${status.status} days_left=${status.days_left}")
+                    tvVipStatus.text = when (status.status) {
+                        "trial" -> if ((status.days_left ?: 0) > 0) "Trial · ${status.days_left}d left" else "Trial ended"
+                        "active" -> "⚡ VIP Active"
+                        "canceled", "expired" -> "VIP Expired"
+                        else -> "—"
+                    }
+                    tvVipStatus.setTextColor(when (status.status) {
+                        "active" -> 0xFFFFCC44.toInt()
+                        "trial" -> 0xFF888888.toInt()
+                        else -> 0xFF555555.toInt()
+                    })
+                    if (status.status != "active") {
+                        Log.d(TAG, "[VIP] showing upgrade button")
+                        btnUpgrade.visibility = View.VISIBLE
+                        btnUpgrade.setOnClickListener {
+                            lifecycleScope.launch {
+                                try {
+                                    btnUpgrade.isEnabled = false
+                                    btnUpgrade.text = "…"
+                                    val checkoutUrl = withContext(Dispatchers.IO) {
+                                        authRepository.createVipCheckout(uid, httpBaseUrl.trimEnd('/'))
+                                    }
+                                    openCheckoutInWebView(checkoutUrl)
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@MainActivity, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    btnUpgrade.isEnabled = true
+                                    btnUpgrade.text = "Upgrade"
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "[VIP] load failed: ${e.message}", e)
+                    tvVipStatus.text = "—"
+                    btnUpgrade.visibility = View.VISIBLE
+                    btnUpgrade.setOnClickListener {
+                        lifecycleScope.launch {
+                            try {
+                                btnUpgrade.isEnabled = false
+                                btnUpgrade.text = "…"
+                                val checkoutUrl = withContext(Dispatchers.IO) {
+                                    authRepository.createVipCheckout(uid, httpBaseUrl.trimEnd('/'))
+                                }
+                                androidx.browser.customtabs.CustomTabsIntent.Builder()
+                                    .setShowTitle(true)
+                                    .build()
+                                    .launchUrl(this@MainActivity, android.net.Uri.parse(checkoutUrl))
+                            } catch (ex: Exception) {
+                                Toast.makeText(this@MainActivity, "Failed: ${ex.message}", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                btnUpgrade.isEnabled = true
+                                btnUpgrade.text = "Upgrade"
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Log.w(TAG, "[VIP] uid is null, skipping load")
+        }
+
+        // ── Option: Custom ───────────────────────────────────────────────────
+        val optionCustom = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            background = optionBg(useCustom)
+            setPadding((14 * dp).toInt(), (12 * dp).toInt(), (14 * dp).toInt(), (12 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            isClickable = true
+            isFocusable = true
+        }
+        val radioCustom = android.widget.RadioButton(this).apply {
+            isChecked = useCustom
+            isClickable = false
+            isFocusable = false
+            buttonTintList = android.content.res.ColorStateList.valueOf(0xFFDC3232.toInt())
+        }
+        optionCustom.addView(radioCustom)
+        optionCustom.addView(TextView(this).apply {
+            text = "Custom"
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .also { it.marginStart = (10 * dp).toInt() }
+        })
+
+        root.addView(optionCustom)
+
+        // ── Custom fields (host + port) ──────────────────────────────────────
+        val customFields = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            visibility = if (useCustom) android.view.View.VISIBLE else android.view.View.GONE
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.topMargin = (16 * dp).toInt() }
+        }
+
+        fun inputBg() = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFF0A0A0F.toInt())
+            cornerRadius = 8 * dp
+            setStroke((1 * dp).toInt(), 0xFF333333.toInt())
+        }
+
+        customFields.addView(TextView(this).apply {
+            text = "Host"
+            textSize = 11f
+            setTextColor(0xFF888888.toInt())
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        })
+        val etHost = android.widget.EditText(this).apply {
+            setText(if (useCustom) savedHost else "")
+            hint = "e.g. 192.168.1.100"
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0xFF555555.toInt())
+            background = inputBg()
+            setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = (12 * dp).toInt() }
+        }
+        customFields.addView(etHost)
+
+        customFields.addView(TextView(this).apply {
+            text = "Port"
+            textSize = 11f
+            setTextColor(0xFF888888.toInt())
+            setPadding(0, 0, 0, (4 * dp).toInt())
+        })
+        val etPort = android.widget.EditText(this).apply {
+            setText(prefs.getInt("port", 22).toString())
+            hint = "22"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            setHintTextColor(0xFF555555.toInt())
+            background = inputBg()
+            setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        customFields.addView(etPort)
+        root.addView(customFields)
+
+        // ── Toggle logic ─────────────────────────────────────────────────────
+        optionDefault.setOnClickListener {
+            useCustom = false
+            radioDefault.isChecked = true
+            radioCustom.isChecked = false
+            optionDefault.background = optionBg(true)
+            optionCustom.background = optionBg(false)
+            customFields.visibility = android.view.View.GONE
+            vipDivider.visibility = android.view.View.VISIBLE
+            vipRow.visibility = android.view.View.VISIBLE
+        }
+        optionCustom.setOnClickListener {
+            useCustom = true
+            radioDefault.isChecked = false
+            radioCustom.isChecked = true
+            optionDefault.background = optionBg(false)
+            optionCustom.background = optionBg(true)
+            customFields.visibility = android.view.View.VISIBLE
+            vipDivider.visibility = android.view.View.GONE
+            vipRow.visibility = android.view.View.GONE
+        }
+
+        // ── Buttons ──────────────────────────────────────────────────────────
+        val btnRow = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            setPadding(0, (20 * dp).toInt(), 0, 0)
+        }
+
+        val dialog = AlertDialog.Builder(this).setView(root).create()
+
+        btnRow.addView(Button(this).apply {
+            text = "Cancel"
+            textSize = 13f
+            setTextColor(0xFF666666.toInt())
+            background = null
+            isAllCaps = false
+            setOnClickListener { dialog.dismiss() }
+        })
+
+        btnRow.addView(Button(this).apply {
+            text = "Save & Reconnect"
+            textSize = 13f
+            setTextColor(0xFFFFFFFF.toInt())
+            isAllCaps = false
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFDC3232.toInt())
+                cornerRadius = 24 * dp
+            }
+            setPadding((20 * dp).toInt(), (10 * dp).toInt(), (20 * dp).toInt(), (10 * dp).toInt())
+            layoutParams = android.widget.LinearLayout.LayoutParams(
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.marginStart = (8 * dp).toInt() }
+            setOnClickListener {
+                val host = if (useCustom) etHost.text.toString().trim().ifBlank { BuildConfig.SSH_HOST } else BuildConfig.SSH_HOST
+                val port = if (useCustom) etPort.text.toString().trim().toIntOrNull() ?: 22 else 22
+                prefs.edit().putString("host", host).putInt("port", port).apply()
+                wsService?.saveSshConfig(host, port)
+                dialog.dismiss()
+                Toast.makeText(this@MainActivity, "SSH config saved, reconnecting…", Toast.LENGTH_SHORT).show()
+            }
+        })
+
+        root.addView(btnRow)
+
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF131318.toInt())
+                cornerRadius = 20 * dp
+            })
+            val params = attributes
+            params.width = (resources.displayMetrics.widthPixels * 0.88).toInt()
+            attributes = params
+        }
+
+        dialog.show()
+
         dialog.window?.setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
             setColor(0xFF131318.toInt())
             cornerRadius = 20 * dp
@@ -685,5 +1069,139 @@ class MainActivity : AppCompatActivity() {
             setColor(0xFF131318.toInt())
             cornerRadius = 20 * dp
         })
+    }
+
+    /** Open a URL inside the app using a full-screen WebView dialog. */
+    private fun openCheckoutInWebView(url: String) {
+        val dp = resources.displayMetrics.density
+
+        // Root container
+        val container = android.widget.FrameLayout(this)
+
+        val webView = android.webkit.WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            visibility = View.INVISIBLE
+        }
+
+        // Loading overlay
+        val loadingOverlay = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF0A0A0F.toInt())
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // Two pulse rings behind the logo
+        val ring1 = android.view.View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x00DC3232)
+                setStroke((2 * dp).toInt(), 0x55DC3232)
+            }
+            val size = (120 * dp).toInt()
+            layoutParams = android.widget.FrameLayout.LayoutParams(size, size, android.view.Gravity.CENTER)
+        }
+        val ring2 = android.view.View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(0x00DC3232)
+                setStroke((2 * dp).toInt(), 0x33DC3232)
+            }
+            val size = (160 * dp).toInt()
+            layoutParams = android.widget.FrameLayout.LayoutParams(size, size, android.view.Gravity.CENTER)
+        }
+
+        // Logo image
+        val logo = android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.logo)
+            val size = (64 * dp).toInt()
+            layoutParams = android.widget.FrameLayout.LayoutParams(size, size, android.view.Gravity.CENTER)
+        }
+
+        // "Loading payment…" label
+        val loadingText = android.widget.TextView(this).apply {
+            text = "Loading payment…"
+            textSize = 13f
+            setTextColor(0xFF666666.toInt())
+            gravity = android.view.Gravity.CENTER
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER
+            ).also { it.topMargin = (110 * dp).toInt() }
+        }
+
+        loadingOverlay.addView(ring2)
+        loadingOverlay.addView(ring1)
+        loadingOverlay.addView(logo)
+        loadingOverlay.addView(loadingText)
+
+        // Pulse animation on rings + logo
+        val pulse1 = android.animation.ObjectAnimator.ofPropertyValuesHolder(
+            ring1,
+            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.3f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.3f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("alpha", 0.8f, 0f, 0.8f)
+        ).apply { duration = 1600; repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator() }
+
+        val pulse2 = android.animation.ObjectAnimator.ofPropertyValuesHolder(
+            ring2,
+            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.2f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.2f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("alpha", 0.5f, 0f, 0.5f)
+        ).apply { duration = 1600; startDelay = 200; repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator() }
+
+        val logoPulse = android.animation.ObjectAnimator.ofPropertyValuesHolder(
+            logo,
+            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.08f, 1f),
+            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.08f, 1f)
+        ).apply { duration = 1600; repeatCount = android.animation.ValueAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator() }
+
+        val pulseSet = android.animation.AnimatorSet().apply { playTogether(pulse1, pulse2, logoPulse) }
+
+        container.addView(webView)
+        container.addView(loadingOverlay)
+
+        val dialog = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.setContentView(container)
+        dialog.setOnDismissListener { pulseSet.cancel() }
+
+        pulseSet.start()
+
+        webView.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: android.webkit.WebView, url: String) {
+                pulseSet.cancel()
+                // Fade out overlay, fade in webview
+                loadingOverlay.animate().alpha(0f).setDuration(300).withEndAction {
+                    loadingOverlay.visibility = View.GONE
+                }.start()
+                webView.alpha = 0f
+                webView.visibility = View.VISIBLE
+                webView.animate().alpha(1f).setDuration(300).start()
+            }
+            override fun shouldOverrideUrlLoading(view: android.webkit.WebView, request: android.webkit.WebResourceRequest): Boolean {
+                val uri = request.url.toString()
+                if (uri.contains("vip=success") || uri.contains("vip=cancel")) {
+                    dialog.dismiss()
+                    if (uri.contains("vip=success")) {
+                        Toast.makeText(this@MainActivity, "VIP activated!", Toast.LENGTH_SHORT).show()
+                    }
+                    return true
+                }
+                return false
+            }
+        }
+
+        webView.loadUrl(url)
+        dialog.show()
     }
 }
