@@ -20,8 +20,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import java.time.Duration
-import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -753,8 +751,7 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "[VIP] status=${status.status} days_left=${status.days_left}")
                     tvVipStatus.text = when (status.status) {
                         "trial" -> {
-                            val label = formatVipTrialRemaining(status.trial_ends_at)
-                            if (label == null) "Trial ended" else "Trial · $label"
+                            status.trial_label ?: "Trial"
                         }
                         "active" -> {
                             val d = status.days_left ?: 0
@@ -1095,38 +1092,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun parseIsoInstant(value: String?): Instant? {
-        if (value.isNullOrBlank()) return null
-        return try {
-            Instant.parse(value)
-        } catch (e: Exception) {
-            Log.w(TAG, "[VIP] failed to parse instant: $value - ${e.message}")
-            null
-        }
-    }
-
     private fun isVipStillValid(status: AuthRepository.VipStatus): Boolean {
-        val now = Instant.now()
-        val trialOk = status.status == "trial" &&
-            parseIsoInstant(status.trial_ends_at)?.isAfter(now) == true
-        val subOk = status.status == "active" &&
-            parseIsoInstant(status.current_period_end)?.isAfter(now) == true
-        return trialOk || subOk
-    }
-
-    private fun formatVipTrialRemaining(iso: String?): String? {
-        val instant = parseIsoInstant(iso) ?: return null
-        val now = Instant.now()
-        if (!instant.isAfter(now)) return null
-        val minutes = Duration.between(now, instant).toMinutes()
-        return when {
-            minutes <= 0L -> null
-            minutes < 60L -> "$minutes min left"
-            else -> {
-                val hours = minutes / 60
-                "$hours h left"
-            }
-        }
+        // Server already auto-expires trial/active based on end timestamps.
+        // If status is still "trial" or "active", treat as valid.
+        return status.status == "trial" || status.status == "active"
     }
 
     private fun showDebugDialog() {

@@ -98,7 +98,8 @@ class AuthRepository(private val backendBaseUrl: String) {
         val status: String,
         val trial_ends_at: String?,
         val current_period_end: String?,
-        val days_left: Int?
+        val days_left: Int?,
+        val trial_label: String?
     )
 
     fun getVipStatus(uid: String): VipStatus {
@@ -114,7 +115,8 @@ class AuthRepository(private val backendBaseUrl: String) {
                 status = obj.optString("status", "none"),
                 trial_ends_at = obj.optString("trial_ends_at").ifBlank { null },
                 current_period_end = obj.optString("current_period_end").ifBlank { null },
-                days_left = if (obj.isNull("days_left")) null else obj.getInt("days_left")
+                days_left = if (obj.isNull("days_left")) null else obj.getInt("days_left"),
+                trial_label = obj.optString("trial_label").ifBlank { null }
             )
         }
     }

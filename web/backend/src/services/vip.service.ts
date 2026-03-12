@@ -16,6 +16,7 @@ export interface VipStatusResponse {
   trial_ends_at: string | null;
   current_period_end: string | null;
   days_left: number | null;
+  trial_label: string | null;
 }
 
 export class VipService {
@@ -28,7 +29,15 @@ export class VipService {
 
   async getStatus(uid: string): Promise<VipStatusResponse> {
     const vip = await this.repo.findByUid(uid);
-    if (!vip) return { status: 'none', trial_ends_at: null, current_period_end: null, days_left: null };
+    if (!vip) {
+      return {
+        status: 'none',
+        trial_ends_at: null,
+        current_period_end: null,
+        days_left: null,
+        trial_label: null,
+      };
+    }
 
     // Auto-expire trial or active subscription if past end date
     const now = new Date();
@@ -39,6 +48,7 @@ export class VipService {
         trial_ends_at: vip.trial_ends_at.toISOString(),
         current_period_end: null,
         days_left: 0,
+        trial_label: null,
       };
     }
     if (vip.status === 'active' && vip.current_period_end && vip.current_period_end < now) {
@@ -48,15 +58,21 @@ export class VipService {
         trial_ends_at: vip.trial_ends_at?.toISOString() ?? null,
         current_period_end: vip.current_period_end.toISOString(),
         days_left: 0,
+        trial_label: null,
       };
     }
 
     const days_left = this.daysLeft(vip);
+    const trial_label =
+      vip.status === 'trial' && vip.trial_ends_at
+        ? this.formatTrialLabel(vip.trial_ends_at, now)
+        : null;
     return {
       status: vip.status,
       trial_ends_at: vip.trial_ends_at?.toISOString() ?? null,
       current_period_end: vip.current_period_end?.toISOString() ?? null,
       days_left,
+      trial_label,
     };
   }
 
@@ -155,5 +171,20 @@ export class VipService {
       return Math.max(0, Math.floor((vip.current_period_end.getTime() - now.getTime()) / 86400000));
     }
     return null;
+  }
+
+  private formatTrialLabel(trialEndsAt: Date, now: Date): string | null {
+    const msLeft = trialEndsAt.getTime() - now.getTime();
+    if (msLeft <= 0) return null;
+    const totalSeconds = Math.floor(msLeft / 1000);
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    if (totalMinutes < 1) {
+      return 'Trial · <1 min left';
+    }
+    if (totalMinutes < 60) {
+      return `Trial · ${totalMinutes} min left`;
+    }
+    const hours = Math.ceil(totalMinutes / 60);
+    return `Trial · ${hours} h left`;
   }
 }

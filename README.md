@@ -1,6 +1,6 @@
 <p align="center">
-  < img src="logo.png" width="160" alt="ClawPaw logo" />
-</p >
+  <img src="logo.png" width="160" alt="ClawPaw logo" />
+</p>
 
 <h1 align="center">ClawPaw</h1>
 
@@ -10,11 +10,11 @@
 </p >
 
 <p align="center">
-  <a href=" ">Website</a > &nbsp;·&nbsp;
-  <a href="https://dl.clawpaw.me/clawpaw-latest.apk">Download APK</a > &nbsp;·&nbsp;
-  <a href="#quick-start">Quick Start</a > &nbsp;·&nbsp;
-  <a href="mailto:ericshen.18888@gmail.com">Contact</a >
-</p >
+  <a href="https://www.clawpaw.me">Website</a> &nbsp;·&nbsp;
+  <a href="https://dl.clawpaw.me/clawpaw-latest.apk">Download APK</a> &nbsp;·&nbsp;
+  <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
+  <a href="mailto:ericshen.18888@gmail.com">Contact</a>
+</p>
 
 <br/>
 
