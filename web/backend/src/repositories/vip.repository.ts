@@ -12,12 +12,22 @@ export interface VipSubscription {
   current_period_end: Date | null;
   created_at: Date;
   updated_at: Date;
+  /** Minutes left in trial, computed by DB as TIMESTAMPDIFF(MINUTE, NOW(), trial_ends_at). Nullable when no trial. */
+  trial_minutes_left?: number | null;
 }
 
 export class VipRepository {
   async findByUid(uid: string): Promise<VipSubscription | null> {
     const [rows] = await pool.query<RowDataPacket[]>(
-      'SELECT * FROM vip_subscriptions WHERE uid = ? LIMIT 1',
+      `SELECT *,
+              CASE
+                WHEN status = 'trial' AND trial_ends_at IS NOT NULL
+                THEN TIMESTAMPDIFF(MINUTE, NOW(), trial_ends_at)
+                ELSE NULL
+              END AS trial_minutes_left
+       FROM vip_subscriptions
+       WHERE uid = ?
+       LIMIT 1`,
       [uid]
     );
     return (rows[0] as VipSubscription) ?? null;

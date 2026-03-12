@@ -63,9 +63,11 @@ export class VipService {
     }
 
     const days_left = this.daysLeft(vip);
+    const trialMinutesLeft =
+      vip.status === 'trial' ? (vip.trial_minutes_left ?? null) : null;
     const trial_label =
-      vip.status === 'trial' && vip.trial_ends_at
-        ? this.formatTrialLabel(vip.trial_ends_at, now)
+      vip.status === 'trial'
+        ? this.formatTrialLabel(trialMinutesLeft)
         : null;
     return {
       status: vip.status,
@@ -173,11 +175,9 @@ export class VipService {
     return null;
   }
 
-  private formatTrialLabel(trialEndsAt: Date, now: Date): string | null {
-    const msLeft = trialEndsAt.getTime() - now.getTime();
-    if (msLeft <= 0) return null;
-    const totalSeconds = Math.floor(msLeft / 1000);
-    const totalMinutes = Math.floor(totalSeconds / 60);
+  private formatTrialLabel(totalMinutes: number | null): string | null {
+    if (totalMinutes == null) return null;
+    if (totalMinutes <= 0) return null;
     if (totalMinutes < 1) {
       return 'Trial · <1 min left';
     }
