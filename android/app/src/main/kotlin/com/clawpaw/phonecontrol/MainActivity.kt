@@ -20,10 +20,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -755,8 +753,8 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "[VIP] status=${status.status} days_left=${status.days_left}")
                     tvVipStatus.text = when (status.status) {
                         "trial" -> {
-                            val label = formatVipExpiryLabel(status.trial_ends_at)
-                            if (label == null) "Trial" else "Trial · ends $label"
+                            val label = formatVipTrialRemaining(status.trial_ends_at)
+                            if (label == null) "Trial ended" else "Trial · $label"
                         }
                         "active" -> {
                             val d = status.days_left ?: 0
@@ -1116,21 +1114,18 @@ class MainActivity : AppCompatActivity() {
         return trialOk || subOk
     }
 
-    private fun formatVipExpiryLabel(iso: String?): String? {
+    private fun formatVipTrialRemaining(iso: String?): String? {
         val instant = parseIsoInstant(iso) ?: return null
-        val zoneId = try {
-            ZoneId.systemDefault()
-        } catch (_: Exception) {
-            return null
-        }
-        val zdt = ZonedDateTime.ofInstant(instant, zoneId)
-        val now = ZonedDateTime.now(zoneId)
-
-        val timePart = DateTimeFormatter.ofPattern("HH:mm").format(zdt)
-        return if (zdt.toLocalDate() == now.toLocalDate()) {
-            "today $timePart"
-        } else {
-            "${zdt.monthValue}/${zdt.dayOfMonth} $timePart"
+        val now = Instant.now()
+        if (!instant.isAfter(now)) return null
+        val minutes = Duration.between(now, instant).toMinutes()
+        return when {
+            minutes <= 0L -> null
+            minutes < 60L -> "$minutes min left"
+            else -> {
+                val hours = minutes / 60
+                "$hours h left"
+            }
         }
     }
 
