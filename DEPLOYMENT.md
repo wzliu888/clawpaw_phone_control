@@ -58,6 +58,8 @@ Nginx Ingress → SLB (47.250.58.81)
 PasswordAuthentication yes
 GatewayPorts yes
 AllowTcpForwarding yes
+ClientAliveInterval 30
+ClientAliveCountMax 8
 
 Match User cp_*
     PasswordAuthentication yes

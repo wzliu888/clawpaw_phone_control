@@ -6,8 +6,14 @@ export interface SshCredential {
   linux_user: string;
   linux_password: string;
   adb_port: number;
+  adb_port_slot: number;  // 0 or 1; active port = adb_port + slot * 10000
   created_at: Date;
   updated_at: Date;
+}
+
+/** Returns the port the phone is currently using (or will use after a flip). */
+export function activePort(cred: SshCredential): number {
+  return cred.adb_port + cred.adb_port_slot * 10000;
 }
 
 const ADB_PORT_MIN = 10000;
@@ -38,6 +44,20 @@ export class SshCredentialRepository {
 
     const cred = await this.findByUid(uid);
     if (!cred) throw new Error(`Port exhausted: all ports in [${ADB_PORT_MIN}, ${ADB_PORT_MAX}] are taken`);
+    return cred;
+  }
+
+  /**
+   * Flip adb_port_slot (0 → 1, 1 → 0) and return the updated credential.
+   * The new activePort() will be on the opposite slot, guaranteed unused by the old sshd session.
+   */
+  async flipSlot(uid: string): Promise<SshCredential> {
+    await pool.query<ResultSetHeader>(
+      'UPDATE ssh_credentials SET adb_port_slot = 1 - adb_port_slot WHERE uid = ?',
+      [uid],
+    );
+    const cred = await this.findByUid(uid);
+    if (!cred) throw new Error(`No SSH credentials for uid=${uid}`);
     return cred;
   }
 }

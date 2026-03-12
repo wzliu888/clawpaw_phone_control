@@ -29,6 +29,50 @@ export const tools: Tool[] = [
       },
     },
   },
+  {
+    name: 'open_url',
+    description: 'Open a URL or deep link on the device (browser, app deep link, etc.).',
+    inputSchema: {
+      type: 'object',
+      required: ['url'],
+      properties: {
+        url: { type: 'string', description: 'URL or deep link to open, e.g. https://example.com or weixin://' },
+      },
+    },
+  },
+  {
+    name: 'send_sms',
+    description: 'Open the SMS composer with a pre-filled recipient and message body. The user still needs to tap Send.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone', 'body'],
+      properties: {
+        phone: { type: 'string', description: 'Recipient phone number' },
+        body:  { type: 'string', description: 'Message body' },
+      },
+    },
+  },
+  {
+    name: 'call',
+    description: 'Initiate a phone call to the given number.',
+    inputSchema: {
+      type: 'object',
+      required: ['phone'],
+      properties: {
+        phone: { type: 'string', description: 'Phone number to call' },
+      },
+    },
+  },
+  {
+    name: 'screen_on',
+    description: 'Wake up and turn on the screen.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'screen_off',
+    description: 'Turn off the screen (sleep/lock).',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 export async function handle(name: string, args: any): Promise<any> {
@@ -44,6 +88,12 @@ export async function handle(name: string, args: any): Promise<any> {
 
   if (name === 'shell') {
     const result = await sendAdb('shell', { command: args.command });
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+  }
+
+  // ADB-routed tools
+  if (['open_url', 'send_sms', 'call', 'screen_on', 'screen_off'].includes(name)) {
+    const result = await sendAdb(name, args ?? {});
     return { content: [{ type: 'text', text: JSON.stringify(result) }] };
   }
 

@@ -141,4 +141,31 @@ class HardwareHandler(private val context: Context) {
 
         return mapOf("duration" to durationMs)
     }
+
+    // ── Ringtone Mode ─────────────────────────────────────────────────────────
+
+    suspend fun ringtoneMode(params: JsonObject): Any {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        val mode = params.get("mode")?.takeIf { !it.isJsonNull }?.asString
+
+        return if (mode != null) {
+            val ringerMode = when (mode) {
+                "silent"  -> AudioManager.RINGER_MODE_SILENT
+                "vibrate" -> AudioManager.RINGER_MODE_VIBRATE
+                "normal"  -> AudioManager.RINGER_MODE_NORMAL
+                else -> throw IllegalArgumentException("Unknown mode: $mode. Use: silent, vibrate, normal")
+            }
+            audio.ringerMode = ringerMode
+            mapOf("mode" to mode)
+        } else {
+            val current = when (audio.ringerMode) {
+                AudioManager.RINGER_MODE_SILENT  -> "silent"
+                AudioManager.RINGER_MODE_VIBRATE -> "vibrate"
+                AudioManager.RINGER_MODE_NORMAL  -> "normal"
+                else -> "unknown"
+            }
+            mapOf("mode" to current)
+        }
+    }
 }

@@ -36,8 +36,8 @@ Or guide the user to install manually from Android Studio (Run button).
 
 After install, ask the user to:
 1. Open the ClawPaw app
-2. Tap **Anonymous Login** (or sign in with Google)
-3. Wait for **"Connected ✓"** to appear
+2. Tap **Connect**
+3. Wait for **Backend connection** and **SSH tunnel** to show green dots
 
 ## Step 3 — Grant Permissions (USB connected)
 
@@ -56,14 +56,13 @@ Then ask the user to check the phone for any permission dialogs and tap **Allow*
 
 ## Step 4 — Verify SSH Tunnel
 
-Ask the user to open the ClawPaw app and confirm both status lines show:
-- **Connected ✓** (WebSocket)
-- **SSH: Connected ✓** (SSH reverse tunnel)
+Ask the user to open the ClawPaw app and confirm both rows show a green dot:
+- **Backend connection** (WebSocket)
+- **SSH tunnel** (SSH reverse tunnel)
 
-If SSH shows Disconnected:
-- Check that `host` is configured in Advanced Settings (`47.250.13.82`)
-- Check that username/password are shown (not blank)
-- Ask user to tap Refresh or restart the app
+If SSH tunnel shows Disconnected or Error:
+- Tap the **Retry** button next to the SSH tunnel status
+- If still failing, restart the app
 
 ## Step 5 — Connect ADB (first time or after Pod restart)
 

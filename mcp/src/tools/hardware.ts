@@ -26,11 +26,11 @@ export const tools: Tool[] = [
   },
   {
     name: 'flashlight',
-    description: 'Get or toggle flashlight.',
+    description: 'Get or set flashlight. Pass on=true to turn on, on=false to turn off. Omit to get current state.',
     inputSchema: {
       type: 'object',
       properties: {
-        on: { type: 'boolean', description: 'true=on, false=off. Omit to get current state.' },
+        on: { type: 'boolean', description: 'true=on, false=off. Omit to get current state. Do NOT pass "action" or any other field — only "on".' },
       },
     },
   },
@@ -41,6 +41,20 @@ export const tools: Tool[] = [
       type: 'object',
       properties: {
         duration: { type: 'number', description: 'Duration in ms. Default: 500.' },
+      },
+    },
+  },
+  {
+    name: 'ringtone_mode',
+    description: 'Get or set the ringer mode. Modes: silent, vibrate, normal.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['silent', 'vibrate', 'normal'],
+          description: 'Ringer mode to set. Omit to get current mode.',
+        },
       },
     },
   },

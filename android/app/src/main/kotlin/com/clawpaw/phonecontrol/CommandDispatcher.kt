@@ -18,14 +18,19 @@ private const val TAG = "CommandDispatcher"
  *   { "id": "<id>", "result": <any> }          on success
  *   { "id": "<id>", "error": { "message": "..." } }  on failure
  */
-class CommandDispatcher(context: Context) {
+class CommandDispatcher(
+    private val context: Context,
+    private val onReconnectSsh: (() -> Unit)? = null,
+) {
 
-    private val gson = Gson()
-    private val hardwareHandler = HardwareHandler(context)
-    private val uiHandler       = UiHandler()
-    private val deviceHandler   = DeviceHandler(context)
-    private val appsHandler     = AppsHandler(context)
-    private val mediaHandler    = MediaHandler(context)
+    private val gson                  = Gson()
+    private val hardwareHandler       = HardwareHandler(context)
+    private val uiHandler             = UiHandler()
+    private val deviceHandler         = DeviceHandler(context)
+    private val appsHandler           = AppsHandler(context)
+    private val mediaHandler          = MediaHandler(context)
+    private val communicationHandler  = CommunicationHandler(context)
+    private val filesHandler          = FilesHandler()
 
     /** All registered method → handler mappings */
     private val handlers: Map<String, suspend (JsonObject) -> Any> = mapOf(
@@ -34,6 +39,7 @@ class CommandDispatcher(context: Context) {
         "brightness"    to hardwareHandler::brightness,
         "flashlight"    to hardwareHandler::flashlight,
         "vibrate"       to hardwareHandler::vibrate,
+        "ringtone_mode" to hardwareHandler::ringtoneMode,
         // UI
         "screenshot"    to uiHandler::screenshot,
         "snapshot"      to uiHandler::snapshot,
@@ -57,6 +63,16 @@ class CommandDispatcher(context: Context) {
         "audio_record"  to mediaHandler::audioRecord,
         "audio_status"  to mediaHandler::audioStatus,
         "sensors"       to mediaHandler::sensors,
+        // Communication
+        "sms"           to communicationHandler::sms,
+        "contacts"      to communicationHandler::contacts,
+        "notifications" to communicationHandler::notifications,
+        "clipboard"     to communicationHandler::clipboard,
+        // Files
+        "files"         to filesHandler::files,
+        "write_file"    to filesHandler::writeFile,
+        // System
+        "reconnect_ssh" to ::reconnectSsh,
     )
 
     /**
@@ -90,6 +106,11 @@ class CommandDispatcher(context: Context) {
             Log.e(TAG, "Handler error for $method: ${e.message}")
             errorResponse(id, e.message ?: "Handler error")
         }
+    }
+
+    private suspend fun reconnectSsh(@Suppress("UNUSED_PARAMETER") params: JsonObject): Any {
+        onReconnectSsh?.invoke()
+        return mapOf("triggered" to true)
     }
 
     private fun successResponse(id: String, result: Any): String =

@@ -1,0 +1,44 @@
+{
+  "id": "clawpaw-agent",
+  "name": "ClawPaw Agent",
+  "description": "通过 ClawPaw 提供手机位置追踪、上下文注入、位置服务和通知监听能力",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "backendUrl": {
+        "type": "string",
+        "description": "ClawPaw 后端地址"
+      },
+      "uid": {
+        "type": "string",
+        "description": "ClawPaw 用户 UID"
+      },
+      "secret": {
+        "type": "string",
+        "description": "ClawPaw Secret"
+      },
+      "locationIntervalSec": {
+        "type": "number",
+        "description": "位置采集间隔（秒），默认 120"
+      },
+      "overworkHours": {
+        "type": "number",
+        "description": "加班提醒阈值（小时），默认 8"
+      },
+      "unusualPlaceMin": {
+        "type": "number",
+        "description": "异常地点提醒阈值（分钟），默认 30"
+      },
+      "gaodeApiKey": {
+        "type": "string",
+        "description": "高德 API Key"
+      },
+      "notificationIntervalSec": {
+        "type": "number",
+        "description": "通知检查间隔（秒），默认 30"
+      }
+    }
+  }
+}

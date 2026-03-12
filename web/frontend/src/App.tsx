@@ -15,7 +15,7 @@ export default function App() {
         background: 'rgba(10,10,15,0.8)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/logo.png" style={{ width: 36, height: 36 }} />
+          <img src="http://clawpaw.oss-accelerate.aliyuncs.com/clawpaw_logo.png" style={{ width: 36, height: 36 }} />
           <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>ClawPaw</span>
         </div>
         <a href="https://github.com/wzliu888/clawpaw_phone_control" target="_blank"
@@ -45,7 +45,7 @@ export default function App() {
           position: 'relative', width: 110, height: 110, marginBottom: 28,
           filter: 'drop-shadow(0 0 30px rgba(220,60,60,0.4))',
         }}>
-          <img src="/logo.png" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          <img src="http://clawpaw.oss-accelerate.aliyuncs.com/clawpaw_logo.png" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
 
         <div style={{
@@ -301,7 +301,7 @@ export default function App() {
         padding: '80px 24px 120px', textAlign: 'center',
         borderTop: '1px solid rgba(255,255,255,0.06)',
       }}>
-        <img src="/logo.png" style={{ width: 64, height: 64, marginBottom: 20, filter: 'drop-shadow(0 0 20px rgba(220,60,60,0.3))' }} />
+        <img src="http://clawpaw.oss-accelerate.aliyuncs.com/clawpaw_logo.png" style={{ width: 64, height: 64, marginBottom: 20, filter: 'drop-shadow(0 0 20px rgba(220,60,60,0.3))' }} />
         <h2 style={{
           fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', fontWeight: 800,
           letterSpacing: '-0.02em', marginBottom: 16,
@@ -332,7 +332,7 @@ export default function App() {
         flexWrap: 'wrap', gap: 12,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/logo.png" style={{ width: 20, height: 20 }} />
+          <img src="http://clawpaw.oss-accelerate.aliyuncs.com/clawpaw_logo.png" style={{ width: 20, height: 20 }} />
           <span style={{ color: '#444', fontSize: '0.8rem' }}>ClawPaw © 2025</span>
         </div>
         <a href="https://github.com/wzliu888/clawpaw_phone_control" target="_blank"

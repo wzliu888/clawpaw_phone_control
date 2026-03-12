@@ -1,0 +1,19 @@
+{
+  "name": "clawpaw-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "peerDependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "@types/node": "^25.4.0",
+    "typescript": "^5.5.0"
+  }
+}

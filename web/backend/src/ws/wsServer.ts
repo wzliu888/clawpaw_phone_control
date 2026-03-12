@@ -3,8 +3,9 @@ import { IncomingMessage } from 'http';
 import { Server } from 'http';
 import { URL } from 'url';
 
-const PING_INTERVAL_MS = 5_000;
-const RPC_TIMEOUT_MS   = 30_000;
+const PING_INTERVAL_MS  = 60_000;  // send ping every 60s
+const PING_MAX_MISSED   = 2;        // terminate after 2 consecutive missed pongs (~2min tolerance)
+const RPC_TIMEOUT_MS    = 120_000;
 const ts = () => new Date().toISOString().slice(11, 19); // HH:MM:SS
 
 // uid -> connected phone WebSocket
@@ -21,7 +22,7 @@ const pending = new Map<string, {
 export function initWsServer(httpServer: Server): void {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+  wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
     const uid = getUidFromRequest(req);
 
     if (!uid) {
@@ -35,27 +36,29 @@ export function initWsServer(httpServer: Server): void {
     console.log(`[WS] uid=${uid} connected (total=${sessions.size})`);
 
     // Server-side ping/pong to detect dead connections
-    let alive = true;
+    let missedPongs = 0;
     const pingTimer = setInterval(() => {
-      if (!alive) {
-        console.warn(`[WS] uid=${uid} pong timeout — terminating`);
+      if (missedPongs >= PING_MAX_MISSED) {
+        console.warn(`[WS] uid=${uid} missed ${missedPongs} pongs — terminating`);
         ws.terminate();
         return;
       }
-      alive = false;
-      console.log(`[WS] ping → uid=${uid} t=${ts()}`);
+      missedPongs++;
+      console.log(`[WS] ping → uid=${uid} t=${ts()} (missed=${missedPongs})`);
       ws.ping();
     }, PING_INTERVAL_MS);
 
     ws.on('pong', () => {
-      alive = true;
+      missedPongs = 0;
       console.log(`[WS] pong ← uid=${uid} t=${ts()}`);
     });
 
     ws.on('message', (data: Buffer) => {
       // Handle JSON-RPC responses from phone
       try {
-        const msg = JSON.parse(data.toString()) as { id?: string; result?: any; error?: { message?: string } };
+        const msg = JSON.parse(data.toString()) as { id?: string; type?: string; result?: any; error?: { message?: string } };
+        // Silently discard app-level keepalive pings from phone
+        if (msg.type === 'ping') return;
         if (msg.id && pending.has(msg.id)) {
           const p = pending.get(msg.id)!;
           clearTimeout(p.timer);

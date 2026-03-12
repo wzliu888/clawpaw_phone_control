@@ -1,10 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { SshProvisionService } from '../services/ssh_provision.service';
 import { SecretRepository } from '../repositories/secret.repository';
+import { VipRepository } from '../repositories/vip.repository';
 
 const router = Router();
 const provisionService = new SshProvisionService();
 const secretRepo = new SecretRepository();
+const vipRepo = new VipRepository();
+
+function isVipValid(vip: Awaited<ReturnType<VipRepository['findByUid']>>): boolean {
+  if (!vip) return false;
+  const now = new Date();
+  if (vip.status === 'trial' && vip.trial_ends_at && vip.trial_ends_at > now) return true;
+  if (vip.status === 'active' && vip.current_period_end && vip.current_period_end > now) return true;
+  return false;
+}
 
 // POST /api/ssh/provision
 // Header: x-clawpaw-secret: <secret>
@@ -23,6 +33,13 @@ router.post('/provision', async (req: Request, res: Response) => {
   const stored = await secretRepo.findByUid(uid);
   if (!stored || stored.secret !== secret) {
     res.status(401).json({ error: 'Invalid secret' });
+    return;
+  }
+
+  // Validate VIP — trial (within period) or active (within period) required
+  const vip = await vipRepo.findByUid(uid);
+  if (!isVipValid(vip)) {
+    res.status(403).json({ error: 'vip_required' });
     return;
   }
 

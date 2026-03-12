@@ -43,11 +43,11 @@ clawpaw_phone_control/
 
 ## Key Technical Decisions
 
-- **uid**: CHAR(36) UUID string derived from device ANDROID_ID
+- **uid**: CHAR(36) UUID generated fresh on each install — not tied to device identity
 - **WS URL**: `ws://<host>/ws?uid=<uid>` — phone connects, backend tracks by uid
 - **Heartbeat**: server-side ping every 5s, terminates connection on pong timeout
 - **Android background**: Foreground Service (dataSync type) with persistent notification keeps WS alive when screen is off
-- **Auth**: anonymous — device registers with ANDROID_ID via `POST /api/auth/anonymous`, backend returns uid
+- **Auth**: anonymous — app calls `POST /api/auth/anonymous` (no body needed), backend creates a new uid; reinstalling the app creates a new uid
 - **Clawpaw Secret**: generated per-user, stored in `clawpaw_secrets` table, used for MCP auth
 
 ## Local Development

@@ -148,7 +148,7 @@ class MediaHandler(private val context: Context) {
                 // Start, wait for duration, stop and return audio
                 val durationSec = params.get("duration")?.takeIf { !it.isJsonNull }?.asLong?.coerceIn(1, 60) ?: 5L
                 startRecording(params)
-                Thread.sleep(durationSec * 1000)
+                kotlinx.coroutines.delay(durationSec * 1000)
                 stopRecording()
             }
             else -> throw IllegalArgumentException("Unknown action: $action. Use start, stop, or capture.")

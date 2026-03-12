@@ -19,6 +19,8 @@ import * as uiTools from './tools/ui.js';
 import * as appTools from './tools/apps.js';
 import * as hardwareTools from './tools/hardware.js';
 import * as mediaTools from './tools/media.js';
+import * as communicationTools from './tools/communication.js';
+import * as filesTools from './tools/files.js';
 
 const allTools = [
   ...deviceTools.tools,
@@ -26,6 +28,8 @@ const allTools = [
   ...appTools.tools,
   ...hardwareTools.tools,
   ...mediaTools.tools,
+  ...communicationTools.tools,
+  ...filesTools.tools,
 ];
 
 const handlers: Record<string, (name: string, args: Record<string, unknown>) => Promise<any>> = {};
@@ -34,6 +38,8 @@ for (const tool of uiTools.tools) handlers[tool.name] = uiTools.handle;
 for (const tool of appTools.tools) handlers[tool.name] = appTools.handle;
 for (const tool of hardwareTools.tools) handlers[tool.name] = hardwareTools.handle;
 for (const tool of mediaTools.tools) handlers[tool.name] = mediaTools.handle;
+for (const tool of communicationTools.tools) handlers[tool.name] = communicationTools.handle;
+for (const tool of filesTools.tools) handlers[tool.name] = filesTools.handle;
 
 const mcpServer = new McpServer(
   { name: 'clawpaw-mcp', version: '1.0.0' },

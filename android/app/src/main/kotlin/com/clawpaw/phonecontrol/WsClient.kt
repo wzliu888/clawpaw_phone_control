@@ -25,20 +25,32 @@ class WsClient(
         private const val BASE_RETRY_DELAY = 500L
         private const val RETRY_MULTIPLIER = 1.5
         private const val MAX_RETRY_DELAY = 15_000L
+        // App-level keepalive: send a ping message every 30s so MIUI doesn't
+        // treat the TCP connection as idle and kill it.
+        private const val KEEPALIVE_INTERVAL_MS = 30_000L
     }
 
     enum class State { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
     @Volatile var state: State = State.DISCONNECTED
         private set
+    @Volatile var reconnectCount: Int = 0
+        private set
+    @Volatile var lastConnectedAt: Long = 0L
+        private set
+    @Volatile var lastFailedAt: Long = 0L
+        private set
+    @Volatile var lastError: String? = null
+        private set
 
     private val client = OkHttpClient.Builder()
-        .pingInterval(5, TimeUnit.SECONDS)
+        .pingInterval(0, TimeUnit.SECONDS)  // disable OkHttp ping — server handles heartbeat
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
     private var ws: okhttp3.WebSocket? = null
     private var scope: CoroutineScope? = null
+    private var keepaliveJob: Job? = null
 
     @Volatile private var shouldReconnect = false
 
@@ -50,6 +62,8 @@ class WsClient(
 
     fun disconnect() {
         shouldReconnect = false
+        keepaliveJob?.cancel()
+        keepaliveJob = null
         scope?.cancel()
         scope = null
         ws?.close(1000, "logout")
@@ -58,6 +72,7 @@ class WsClient(
     }
 
     private fun setState(s: State) {
+        ConnectionLog.log("WS", s.name)
         state = s
         onStatusChange(s == State.CONNECTED)
     }
@@ -81,6 +96,19 @@ class WsClient(
         }
     }
 
+    private fun startKeepalive(webSocket: okhttp3.WebSocket) {
+        keepaliveJob?.cancel()
+        keepaliveJob = scope?.launch {
+            while (isActive && state == State.CONNECTED) {
+                delay(KEEPALIVE_INTERVAL_MS)
+                if (state == State.CONNECTED) {
+                    webSocket.send("{\"type\":\"ping\"}")
+                    Log.d(TAG, "keepalive ping sent")
+                }
+            }
+        }
+    }
+
     private fun openSocket() {
         setState(State.CONNECTING)
         val url = "$wsBaseUrl/ws?uid=${uid}"
@@ -90,7 +118,9 @@ class WsClient(
         ws = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
                 Log.i(TAG, "WS connected uid=$uid")
+                lastConnectedAt = System.currentTimeMillis()
                 setState(State.CONNECTED)
+                startKeepalive(webSocket)
             }
 
             override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
@@ -114,6 +144,8 @@ class WsClient(
             override fun onClosed(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
                 Log.i(TAG, "WS closed code=$code reason=$reason")
                 ws = null
+                keepaliveJob?.cancel()
+                ConnectionLog.log("WS", "closed code=$code reason=$reason")
                 setState(State.DISCONNECTED)
                 if (shouldReconnect) scope?.launch { connectWithRetry() }
             }
@@ -121,6 +153,11 @@ class WsClient(
             override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WS failure: ${t.message}")
                 ws = null
+                keepaliveJob?.cancel()
+                lastFailedAt = System.currentTimeMillis()
+                lastError = t.message
+                reconnectCount++
+                ConnectionLog.log("WS", "failure: ${t.message}")
                 setState(State.ERROR)
                 if (shouldReconnect) scope?.launch { connectWithRetry() }
             }

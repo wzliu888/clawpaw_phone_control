@@ -11,12 +11,11 @@ class AuthRepository(private val backendBaseUrl: String) {
     private val client = OkHttpClient()
     private val json = "application/json".toMediaType()
 
-    data class LoginResult(val uid: String)
+    data class LoginResult(val uid: String, val secret: String)
 
-    /** Anonymous login — registers a device by its generated UUID. */
-    fun loginAnonymous(deviceId: String): LoginResult {
-        val body = JSONObject().apply { put("deviceId", deviceId) }
-            .toString().toRequestBody(json)
+    /** Anonymous login — backend creates a new uid + secret for each fresh install. */
+    fun loginAnonymous(): LoginResult {
+        val body = JSONObject().toString().toRequestBody(json)
 
         val request = Request.Builder()
             .url("$backendBaseUrl/api/auth/anonymous")
@@ -26,7 +25,8 @@ class AuthRepository(private val backendBaseUrl: String) {
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("Anonymous login failed: ${response.code}")
             val rb = response.body?.string() ?: error("Empty response")
-            return LoginResult(uid = JSONObject(rb).getString("uid"))
+            val obj = JSONObject(rb)
+            return LoginResult(uid = obj.getString("uid"), secret = obj.getString("secret"))
         }
     }
 
@@ -47,6 +47,7 @@ class AuthRepository(private val backendBaseUrl: String) {
             .build()
 
         client.newCall(request).execute().use { response ->
+            if (response.code == 403) error("vip_required")
             if (!response.isSuccessful) error("SSH provision failed: ${response.code}")
             val rb = response.body?.string() ?: error("Empty response")
             val obj = JSONObject(rb)
@@ -90,6 +91,50 @@ class AuthRepository(private val backendBaseUrl: String) {
             val rb = response.body?.string() ?: error("Empty response")
             val secret = JSONObject(rb).optString("secret", "")
             return secret.ifBlank { null }
+        }
+    }
+
+    data class VipStatus(
+        val status: String,
+        val trial_ends_at: String?,
+        val current_period_end: String?,
+        val days_left: Int?
+    )
+
+    fun getVipStatus(uid: String): VipStatus {
+        val request = Request.Builder()
+            .url("$backendBaseUrl/api/vip/status?uid=$uid")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("getVipStatus failed: ${response.code}")
+            val obj = JSONObject(response.body?.string() ?: error("Empty response"))
+            return VipStatus(
+                status = obj.optString("status", "none"),
+                trial_ends_at = obj.optString("trial_ends_at").ifBlank { null },
+                current_period_end = obj.optString("current_period_end").ifBlank { null },
+                days_left = if (obj.isNull("days_left")) null else obj.getInt("days_left")
+            )
+        }
+    }
+
+    /** Create a Stripe Checkout session and return the hosted URL. */
+    fun createVipCheckout(uid: String, returnUrl: String): String {
+        val body = JSONObject().apply {
+            put("uid", uid)
+            put("return_url", returnUrl)
+        }.toString().toRequestBody(json)
+
+        val request = Request.Builder()
+            .url("$backendBaseUrl/api/vip/checkout")
+            .post(body)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("createVipCheckout failed: ${response.code}")
+            val obj = JSONObject(response.body?.string() ?: error("Empty response"))
+            return obj.getString("url")
         }
     }
 }

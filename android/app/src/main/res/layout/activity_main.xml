@@ -18,14 +18,17 @@
 
         <!-- Logo -->
         <ImageView
+            android:id="@+id/ivLogo"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:src="@drawable/logo"
             android:contentDescription="ClawPaw logo"
-            android:scaleType="fitCenter" />
+            android:scaleType="fitCenter"
+            android:alpha="0" />
 
         <!-- App name -->
         <TextView
+            android:id="@+id/tvAppName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
@@ -33,10 +36,12 @@
             android:textColor="@color/text_primary"
             android:textSize="36sp"
             android:textStyle="bold"
-            android:letterSpacing="0.02" />
+            android:letterSpacing="0.02"
+            android:alpha="0" />
 
         <!-- Tagline -->
         <TextView
+            android:id="@+id/tvTagline"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
@@ -44,7 +49,8 @@
             android:textColor="@color/text_secondary"
             android:textSize="15sp"
             android:gravity="center"
-            android:lineSpacingMultiplier="1.4" />
+            android:lineSpacingMultiplier="1.4"
+            android:alpha="0" />
 
         <!-- Connect button (pre-login) -->
         <Button
@@ -237,6 +243,18 @@
                         android:visibility="gone"
                         style="@style/Widget.AppCompat.Button.Borderless" />
 
+                    <ImageView
+                        android:id="@+id/ivSshSettings"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@android:drawable/ic_menu_manage"
+                        android:padding="6dp"
+                        android:alpha="0.5"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:background="@drawable/bg_icon_btn"
+                        android:contentDescription="SSH advanced settings" />
+
                 </LinearLayout>
 
             </LinearLayout>
@@ -335,21 +353,35 @@
 
             </LinearLayout>
 
-            <!-- MCP config row -->
+            <!-- Agent section -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
+                android:orientation="vertical"
                 android:background="#131318"
-                android:paddingTop="14dp"
-                android:paddingBottom="14dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="16dp"
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
-                android:layout_marginTop="2dp"
-                android:id="@+id/layoutMcpConfig"
-                android:clickable="true"
-                android:focusable="true">
+                android:layout_marginTop="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="AGENT"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.12"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:id="@+id/layoutMcpConfig"
+                    android:clickable="true"
+                    android:focusable="true">
 
                 <ImageView
                     android:id="@+id/ivMcpIcon"
@@ -375,18 +407,36 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="18sp" />
 
+                </LinearLayout>
+
             </LinearLayout>
 
-            <!-- Sign Out at bottom -->
-            <Button
-                android:id="@+id/btnLogout"
-                android:layout_width="wrap_content"
+            <!-- Bottom row: Debug + Sign Out -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="64dp"
-                android:text="Sign Out"
-                android:textColor="@color/text_secondary"
-                style="@style/Widget.AppCompat.Button.Borderless" />
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="64dp">
+
+                <Button
+                    android:id="@+id/btnDebug"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Debug"
+                    android:textColor="@color/text_secondary"
+                    android:visibility="gone"
+                    style="@style/Widget.AppCompat.Button.Borderless" />
+
+                <Button
+                    android:id="@+id/btnLogout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sign Out"
+                    android:textColor="@color/text_secondary"
+                    style="@style/Widget.AppCompat.Button.Borderless" />
+
+            </LinearLayout>
 
         </LinearLayout>
 

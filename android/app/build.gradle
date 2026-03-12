@@ -22,6 +22,7 @@ android {
         versionName "1.0"
 
         buildConfigField "String", "WS_URL", "\"${localProps.getProperty('WS_URL', 'ws://10.0.2.2:3000')}\""
+        buildConfigField "String", "SSH_HOST", "\"${localProps.getProperty('SSH_HOST', '47.250.13.82')}\""
     }
 
     buildFeatures {
@@ -61,4 +62,7 @@ dependencies {
 
     // JSch — pure Java SSH client for reverse tunnel
     implementation 'com.github.mwiede:jsch:0.2.18'
+
+    // Chrome Custom Tabs — in-app browser for Stripe checkout
+    implementation 'androidx.browser:browser:1.8.0'
 }
